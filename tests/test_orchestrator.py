@@ -148,3 +148,89 @@ async def test_dm_about_public_still_calls_runner(store):
     ans = await orch.handle_ask(text="q", thread_ts="tx", channel_id="D999", is_dm=True)
     assert ans.text == "answer to q"
     assert runner.calls[0][1].name == "MyTV"
+
+
+from babbla.lobby import CatalogEntry
+from babbla.session_store import LobbyThreadStore
+
+PUB = ProjectBinding("MyTV", "Wkkkkk", "MyTV", "public", "C123", False)
+PRIV = ProjectBinding("Secret", "Wkkkkk", "Secret", "private", "C777", False)
+CATALOG = (CatalogEntry(PUB, None), CatalogEntry(PRIV, None))
+
+
+def _classify_returning(name, *, recorder=None):
+    async def classify(text, catalog):
+        if recorder is not None:
+            recorder.append((text, catalog))
+        return name
+    return classify
+
+
+def _lobby_orch(config_bindings, runner, store, classify, lobby_store):
+    return Orchestrator(
+        Config(bindings=config_bindings),
+        runner,
+        store,
+        catalog=CATALOG,
+        classify_fn=classify,
+        lobby_store=lobby_store,
+    )
+
+
+async def test_lobby_routes_public_runs_and_persists(store, tmp_path):
+    runner = FakeRunner()
+    lobby_store = LobbyThreadStore(str(tmp_path / "l.db"))
+    orch = _lobby_orch((PUB, PRIV), runner, store, _classify_returning("MyTV"), lobby_store)
+    ans = await orch.handle_lobby_ask(text="how does playback work?", thread_ts="tl")
+    assert ans.text.startswith("answer to how does playback work?")
+    assert "<#C123>" in ans.text                       # pointer suffix appended
+    assert runner.calls[0][1].name == "MyTV"           # ran the routed project
+    assert await lobby_store.get("tl") == "MyTV"        # sticky persisted
+    assert await store.get_session("tl") == "sess-1"    # session persisted
+    lobby_store.close()
+
+
+async def test_lobby_sticky_skips_routing(store, tmp_path):
+    runner = FakeRunner()
+    lobby_store = LobbyThreadStore(str(tmp_path / "l.db"))
+    await lobby_store.put("tl", "MyTV")
+    recorder = []
+    orch = _lobby_orch((PUB, PRIV), runner, store, _classify_returning("Secret", recorder=recorder), lobby_store)
+    ans = await orch.handle_lobby_ask(text="follow up", thread_ts="tl")
+    assert recorder == []                               # classifier NOT called on sticky hit
+    assert runner.calls[0][1].name == "MyTV"            # stayed on the sticky project
+    lobby_store.close()
+
+
+async def test_lobby_no_match_returns_discovery(store, tmp_path):
+    runner = FakeRunner()
+    lobby_store = LobbyThreadStore(str(tmp_path / "l.db"))
+    orch = _lobby_orch((PUB, PRIV), runner, store, _classify_returning("NONE"), lobby_store)
+    ans = await orch.handle_lobby_ask(text="unrelated", thread_ts="tl")
+    assert "I can help with" in ans.text                # discovery reply
+    assert "Secret" not in ans.text                     # private not advertised
+    assert runner.calls == []                           # no agent run
+    assert await lobby_store.get("tl") is None          # nothing persisted
+    lobby_store.close()
+
+
+async def test_lobby_private_match_points_dont_reveal(store, tmp_path):
+    runner = FakeRunner()
+    lobby_store = LobbyThreadStore(str(tmp_path / "l.db"))
+    orch = _lobby_orch((PUB, PRIV), runner, store, _classify_returning("Secret"), lobby_store)
+    ans = await orch.handle_lobby_ask(text="how does Secret auth work?", thread_ts="tl")
+    assert "<#C777>" in ans.text                        # points to its channel
+    assert runner.calls == []                           # never ran the agent
+    assert await lobby_store.get("tl") is None          # no sticky for a denied match
+    lobby_store.close()
+
+
+async def test_lobby_sticky_project_now_private_is_denied(store, tmp_path):
+    runner = FakeRunner()
+    lobby_store = LobbyThreadStore(str(tmp_path / "l.db"))
+    await lobby_store.put("tl", "Secret")               # previously routed, now private
+    orch = _lobby_orch((PUB, PRIV), runner, store, _classify_returning("Secret"), lobby_store)
+    ans = await orch.handle_lobby_ask(text="follow up", thread_ts="tl")
+    assert "<#C777>" in ans.text                        # re-authorized -> points-don't-reveal
+    assert runner.calls == []
+    lobby_store.close()
