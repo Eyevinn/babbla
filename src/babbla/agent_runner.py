@@ -4,8 +4,8 @@ from dataclasses import dataclass
 
 from claude_agent_sdk import ClaudeAgentOptions, query as _sdk_query
 
-from concierge.config import ProjectBinding
-from concierge.read_only import DEFAULT_MODEL, build_agent_config
+from babbla.config import ProjectBinding
+from babbla.read_only import DEFAULT_MODEL, build_agent_config
 
 
 @dataclass(frozen=True)

@@ -1,4 +1,4 @@
-# Project Concierge
+# Babbla
 
 **Ask any project what changed, what's live, and why — right in Slack, without interrupting a developer.**
 
@@ -10,14 +10,14 @@ Today there's really only one way to find out — go interrupt a developer, or p
 
 ## The idea
 
-**Project Concierge** lets you *ask a project questions in plain language* and get real answers, and it *sends you summaries of what changed* — all inside Slack, no terminal required.
+**Babbla** lets you *ask a project questions in plain language* and get real answers, and it *sends you summaries of what changed* — all inside Slack, no terminal required.
 
 Two simple things it does:
 - **Ask** — pose a question, get an answer drawn from the project's history, code, and past decisions.
 - **Digest** — receive a scheduled summary of what changed, on whatever rhythm suits you.
 
 It lives in three places:
-- **The Lobby** — one open spot where anyone can ask *anything*. You don't need to know which project your question belongs to; the Concierge figures that out, answers, and points you to the right team channel. Great for newcomers finding their feet.
+- **The Lobby** — one open spot where anyone can ask *anything*. You don't need to know which project your question belongs to; Babbla figures that out, answers, and points you to the right team channel. Great for newcomers finding their feet.
 - **Project Channels** — a shared space per project where the team's questions, updates, and the team summary all live together, so everyone learns from each other's questions.
 - **Private DMs** — your own questions and your own personal summary, just for you.
 

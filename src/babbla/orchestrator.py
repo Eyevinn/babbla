@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 
-from concierge.agent_runner import CitedAnswer
-from concierge.config import Config, ProjectBinding
+from babbla.agent_runner import CitedAnswer
+from babbla.config import Config, ProjectBinding
 
 
 class UnknownSurfaceError(Exception):

@@ -2,8 +2,8 @@ import asyncio
 
 import pytest
 
-from concierge.agent_runner import CitedAnswer
-from concierge.slack_adapter import (
+from babbla.agent_runner import CitedAnswer
+from babbla.slack_adapter import (
     ERROR_TEXT,
     PLACEHOLDER,
     clean_mention_text,

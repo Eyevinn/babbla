@@ -3,8 +3,8 @@ import re
 
 import pytest
 
-from concierge.agent_runner import AgentRunner, Secrets
-from concierge.config import ProjectBinding
+from babbla.agent_runner import AgentRunner, Secrets
+from babbla.config import ProjectBinding
 
 BINDING = ProjectBinding("MyTV", "Wkkkkk", "MyTV", "public", None, True)
 

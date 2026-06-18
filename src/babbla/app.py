@@ -5,12 +5,12 @@ import logging
 import os
 from typing import Mapping
 
-from concierge.agent_runner import AgentRunner, Secrets
-from concierge.config import load_config
-from concierge.orchestrator import Orchestrator
-from concierge.read_only import DEFAULT_MODEL
-from concierge.session_store import SessionStore
-from concierge.slack_adapter import register_handlers
+from babbla.agent_runner import AgentRunner, Secrets
+from babbla.config import load_config
+from babbla.orchestrator import Orchestrator
+from babbla.read_only import DEFAULT_MODEL
+from babbla.session_store import SessionStore
+from babbla.slack_adapter import register_handlers
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ def load_secrets(env: Mapping[str, str]) -> Secrets:
         github_token=env["GITHUB_TOKEN"],
         agentmemory_url=env.get("AGENTMEMORY_URL", "http://localhost:3111"),
         agentmemory_secret=env.get("AGENTMEMORY_SECRET", ""),
-        model=env.get("CONCIERGE_MODEL", DEFAULT_MODEL),
+        model=env.get("BABBLA_MODEL", DEFAULT_MODEL),
     )
 
 
@@ -46,14 +46,14 @@ async def main() -> None:
 
     secrets = load_secrets(os.environ)
     orchestrator = build_orchestrator(
-        config_path=os.environ.get("CONCIERGE_CONFIG", "config/channels.yaml"),
-        db_path=os.environ.get("CONCIERGE_DB", "concierge.db"),
+        config_path=os.environ.get("BABBLA_CONFIG", "config/channels.yaml"),
+        db_path=os.environ.get("BABBLA_DB", "babbla.db"),
         secrets=secrets,
     )
     app = AsyncApp(token=os.environ["SLACK_BOT_TOKEN"])
     register_handlers(app, orchestrator)
     handler = AsyncSocketModeHandler(app, os.environ["SLACK_APP_TOKEN"])
-    logger.info("Project Concierge (MyTV Q&A pilot) starting in Socket Mode…")
+    logger.info("Babbla (MyTV Q&A pilot) starting in Socket Mode…")
     await handler.start_async()
 
 

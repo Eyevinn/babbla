@@ -1,5 +1,5 @@
-import concierge
+import babbla
 
 
 def test_package_version():
-    assert concierge.__version__ == "0.1.0"
+    assert babbla.__version__ == "0.1.0"

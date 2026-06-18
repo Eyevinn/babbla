@@ -2,10 +2,10 @@ import asyncio
 
 import pytest
 
-from concierge.agent_runner import CitedAnswer
-from concierge.config import Config, ProjectBinding
-from concierge.orchestrator import Orchestrator, UnknownSurfaceError
-from concierge.session_store import SessionStore
+from babbla.agent_runner import CitedAnswer
+from babbla.config import Config, ProjectBinding
+from babbla.orchestrator import Orchestrator, UnknownSurfaceError
+from babbla.session_store import SessionStore
 
 BINDING = ProjectBinding("MyTV", "Wkkkkk", "MyTV", "public", "C123", True)
 CONFIG = Config(bindings=(BINDING,))

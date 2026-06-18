@@ -6,7 +6,7 @@
 
 ## Context
 
-This is the first pilot of **Project Concierge** — a read-only Slack assistant that lets
+This is the first pilot of **Babbla** — a read-only Slack assistant that lets
 colleagues understand and trace projects without a terminal.
 
 The pilot implements the **Ask** pillar (pull, Q&A) against a single Project — **MyTV**
@@ -47,7 +47,7 @@ no Lobby routing, no Digest.
 
 ### Core principle
 
-> **Read the canonical git remote, never a working tree.** The Concierge's data source is
+> **Read the canonical git remote, never a working tree.** Babbla's data source is
 > GitHub (pushed commits / PRs / branches), never the orchestrator host's filesystem. This is
 > what makes it safe to share over a team and host-independent, and it structurally excludes
 > uncommitted edits, untracked files, and gitignored secrets (MyTV's `.env`, `dev.db`).

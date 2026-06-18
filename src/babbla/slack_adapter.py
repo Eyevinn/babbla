@@ -4,7 +4,7 @@ import asyncio
 import logging
 import re
 
-from concierge.orchestrator import Orchestrator
+from babbla.orchestrator import Orchestrator
 
 logger = logging.getLogger(__name__)
 

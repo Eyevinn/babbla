@@ -27,13 +27,13 @@
 - Create: `pyproject.toml`
 - Create: `.gitignore`
 - Create: `.env.example`
-- Create: `src/concierge/__init__.py`
+- Create: `src/babbla/__init__.py`
 - Create: `tests/__init__.py`
 - Create: `tests/test_scaffold.py`
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: importable package `concierge` with `__version__: str`; a working `pytest` + `pytest-asyncio` toolchain (`asyncio_mode = "auto"`).
+- Produces: importable package `babbla` with `__version__: str`; a working `pytest` + `pytest-asyncio` toolchain (`asyncio_mode = "auto"`).
 
 - [ ] **Step 1: Write `.gitignore`**
 
@@ -61,7 +61,7 @@ PROPOSAL-pitch.md
 
 ```toml
 [project]
-name = "project-concierge"
+name = "babbla"
 version = "0.1.0"
 description = "Read-only Slack assistant — MyTV Q&A pilot"
 requires-python = ">=3.12"
@@ -111,7 +111,7 @@ AGENTMEMORY_URL=http://localhost:3111
 AGENTMEMORY_SECRET=
 ```
 
-- [ ] **Step 4: Write the package marker `src/concierge/__init__.py`**
+- [ ] **Step 4: Write the package marker `src/babbla/__init__.py`**
 
 ```python
 __version__ = "0.1.0"
@@ -125,17 +125,17 @@ __version__ = "0.1.0"
 - [ ] **Step 6: Write the failing toolchain test `tests/test_scaffold.py`**
 
 ```python
-import concierge
+import babbla
 
 
 def test_package_version():
-    assert concierge.__version__ == "0.1.0"
+    assert babbla.__version__ == "0.1.0"
 ```
 
 - [ ] **Step 7: Create venv, install, run the test (expect FAIL → then PASS after install)**
 
 ```bash
-cd project-concierge
+cd babbla
 python3 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 .venv/bin/pytest tests/test_scaffold.py -v
@@ -145,8 +145,8 @@ Expected: PASS (`test_package_version`). If `claude-agent-sdk` fails to resolve 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add pyproject.toml .gitignore .env.example src/concierge/__init__.py tests/__init__.py tests/test_scaffold.py
-git commit -m "chore: scaffold concierge package and test toolchain"
+git add pyproject.toml .gitignore .env.example src/babbla/__init__.py tests/__init__.py tests/test_scaffold.py
+git commit -m "chore: scaffold babbla package and test toolchain"
 ```
 
 ---
@@ -155,7 +155,7 @@ git commit -m "chore: scaffold concierge package and test toolchain"
 
 **Files:**
 - Create: `config/channels.yaml`
-- Create: `src/concierge/config.py`
+- Create: `src/babbla/config.py`
 - Test: `tests/test_config.py`
 
 **Interfaces:**
@@ -188,7 +188,7 @@ from pathlib import Path
 
 import pytest
 
-from concierge.config import Config, ProjectBinding, load_config
+from babbla.config import Config, ProjectBinding, load_config
 
 FIXTURE = """
 projects:
@@ -248,9 +248,9 @@ def test_rejects_multiple_dm_projects(tmp_path):
 - [ ] **Step 3: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_config.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'concierge.config'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'babbla.config'`.
 
-- [ ] **Step 4: Write `src/concierge/config.py`**
+- [ ] **Step 4: Write `src/babbla/config.py`**
 
 ```python
 from __future__ import annotations
@@ -315,7 +315,7 @@ Expected: PASS (5 tests).
 - [ ] **Step 6: Commit**
 
 ```bash
-git add config/channels.yaml src/concierge/config.py tests/test_config.py
+git add config/channels.yaml src/babbla/config.py tests/test_config.py
 git commit -m "feat: channels.yaml config loader with surface->project resolution"
 ```
 
@@ -324,7 +324,7 @@ git commit -m "feat: channels.yaml config loader with surface->project resolutio
 ### Task 3: Read-only agent config builder + load-bearing guard test
 
 **Files:**
-- Create: `src/concierge/read_only.py`
+- Create: `src/babbla/read_only.py`
 - Test: `tests/test_read_only_guard.py`
 
 **Interfaces:**
@@ -340,7 +340,7 @@ git commit -m "feat: channels.yaml config loader with surface->project resolutio
 ```python
 import pytest
 
-from concierge.read_only import (
+from babbla.read_only import (
     AGENTMEMORY_READERS,
     AGENTMEMORY_WRITERS,
     ALLOWED_TOOLS,
@@ -419,9 +419,9 @@ def test_system_prompt_names_repo(cfg):
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_read_only_guard.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'concierge.read_only'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'babbla.read_only'`.
 
-- [ ] **Step 3: Write `src/concierge/read_only.py`**
+- [ ] **Step 3: Write `src/babbla/read_only.py`**
 
 ```python
 from __future__ import annotations
@@ -469,7 +469,7 @@ class AgentConfig:
 def build_system_prompt(owner: str, repo: str) -> str:
     slug = f"{owner}/{repo}"
     return (
-        f"You are Project Concierge, a read-only assistant answering questions about the "
+        f"You are Babbla, a read-only assistant answering questions about the "
         f"{slug} project on GitHub. Answer ONLY from {slug}'s pushed history and code "
         f"(commits, pull requests, branches, files) reachable via the github tools, plus "
         f"rationale from the agentmemory tools. You have no write access and no local files.\n\n"
@@ -544,7 +544,7 @@ Expected: PASS (10 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/concierge/read_only.py tests/test_read_only_guard.py
+git add src/babbla/read_only.py tests/test_read_only_guard.py
 git commit -m "feat: read-only agent config builder + load-bearing guard test"
 ```
 
@@ -553,7 +553,7 @@ git commit -m "feat: read-only agent config builder + load-bearing guard test"
 ### Task 4: Session store (SQLite `thread_ts → session_id` with TTL)
 
 **Files:**
-- Create: `src/concierge/session_store.py`
+- Create: `src/babbla/session_store.py`
 - Test: `tests/test_session_store.py`
 
 **Interfaces:**
@@ -567,7 +567,7 @@ git commit -m "feat: read-only agent config builder + load-bearing guard test"
 - [ ] **Step 1: Write the failing test `tests/test_session_store.py`**
 
 ```python
-from concierge.session_store import SessionStore
+from babbla.session_store import SessionStore
 
 
 async def test_put_then_get_roundtrip(tmp_path):
@@ -616,9 +616,9 @@ async def test_persists_across_instances(tmp_path):
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_session_store.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'concierge.session_store'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'babbla.session_store'`.
 
-- [ ] **Step 3: Write `src/concierge/session_store.py`**
+- [ ] **Step 3: Write `src/babbla/session_store.py`**
 
 ```python
 from __future__ import annotations
@@ -692,7 +692,7 @@ Expected: PASS (5 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/concierge/session_store.py tests/test_session_store.py
+git add src/babbla/session_store.py tests/test_session_store.py
 git commit -m "feat: SQLite session store with TTL eviction"
 ```
 
@@ -701,11 +701,11 @@ git commit -m "feat: SQLite session store with TTL eviction"
 ### Task 5: Agent runner (`claude_agent_sdk` query/resume → CitedAnswer)
 
 **Files:**
-- Create: `src/concierge/agent_runner.py`
+- Create: `src/babbla/agent_runner.py`
 - Test: `tests/test_agent_runner.py`
 
 **Interfaces:**
-- Consumes: `concierge.config.ProjectBinding`; `concierge.read_only.build_agent_config` and `AgentConfig`.
+- Consumes: `babbla.config.ProjectBinding`; `babbla.read_only.build_agent_config` and `AgentConfig`.
 - Produces:
   - `@dataclass(frozen=True) CitedAnswer(text: str, session_id: str | None)`
   - `@dataclass(frozen=True) Secrets(github_token: str, agentmemory_url: str, agentmemory_secret: str, model: str = DEFAULT_MODEL)`
@@ -718,8 +718,8 @@ git commit -m "feat: SQLite session store with TTL eviction"
 ```python
 import pytest
 
-from concierge.agent_runner import AgentRunner, CitedAnswer, Secrets
-from concierge.config import ProjectBinding
+from babbla.agent_runner import AgentRunner, CitedAnswer, Secrets
+from babbla.config import ProjectBinding
 
 BINDING = ProjectBinding("MyTV", "Wkkkkk", "MyTV", "public", "C123", True)
 SECRETS = Secrets(github_token="ghp_x", agentmemory_url="http://localhost:3111", agentmemory_secret="")
@@ -779,9 +779,9 @@ async def test_run_ask_resume_sets_session():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_agent_runner.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'concierge.agent_runner'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'babbla.agent_runner'`.
 
-- [ ] **Step 3: Write `src/concierge/agent_runner.py`**
+- [ ] **Step 3: Write `src/babbla/agent_runner.py`**
 
 ```python
 from __future__ import annotations
@@ -790,8 +790,8 @@ from dataclasses import dataclass
 
 from claude_agent_sdk import ClaudeAgentOptions, query as _sdk_query
 
-from concierge.config import ProjectBinding
-from concierge.read_only import DEFAULT_MODEL, build_agent_config
+from babbla.config import ProjectBinding
+from babbla.read_only import DEFAULT_MODEL, build_agent_config
 
 
 @dataclass(frozen=True)
@@ -875,7 +875,7 @@ Expected: PASS (4 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/concierge/agent_runner.py tests/test_agent_runner.py
+git add src/babbla/agent_runner.py tests/test_agent_runner.py
 git commit -m "feat: agent runner over claude-agent-sdk with session resume"
 ```
 
@@ -884,11 +884,11 @@ git commit -m "feat: agent runner over claude-agent-sdk with session resume"
 ### Task 6: Orchestrator (the Ask seam)
 
 **Files:**
-- Create: `src/concierge/orchestrator.py`
+- Create: `src/babbla/orchestrator.py`
 - Test: `tests/test_orchestrator.py`
 
 **Interfaces:**
-- Consumes: `concierge.config.Config` + `ProjectBinding`; `concierge.session_store.SessionStore`; `concierge.agent_runner.AgentRunner` + `CitedAnswer`.
+- Consumes: `babbla.config.Config` + `ProjectBinding`; `babbla.session_store.SessionStore`; `babbla.agent_runner.AgentRunner` + `CitedAnswer`.
 - Produces:
   - `class UnknownSurfaceError(Exception)` — raised when no binding matches the surface.
   - `class Orchestrator` with `__init__(self, config: Config, runner: AgentRunner, store: SessionStore)` and
@@ -902,10 +902,10 @@ import asyncio
 
 import pytest
 
-from concierge.agent_runner import CitedAnswer
-from concierge.config import Config, ProjectBinding
-from concierge.orchestrator import Orchestrator, UnknownSurfaceError
-from concierge.session_store import SessionStore
+from babbla.agent_runner import CitedAnswer
+from babbla.config import Config, ProjectBinding
+from babbla.orchestrator import Orchestrator, UnknownSurfaceError
+from babbla.session_store import SessionStore
 
 BINDING = ProjectBinding("MyTV", "Wkkkkk", "MyTV", "public", "C123", True)
 CONFIG = Config(bindings=(BINDING,))
@@ -988,17 +988,17 @@ async def test_per_thread_lock_serializes(store):
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_orchestrator.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'concierge.orchestrator'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'babbla.orchestrator'`.
 
-- [ ] **Step 3: Write `src/concierge/orchestrator.py`**
+- [ ] **Step 3: Write `src/babbla/orchestrator.py`**
 
 ```python
 from __future__ import annotations
 
 import asyncio
 
-from concierge.agent_runner import CitedAnswer
-from concierge.config import Config, ProjectBinding
+from babbla.agent_runner import CitedAnswer
+from babbla.config import Config, ProjectBinding
 
 
 class UnknownSurfaceError(Exception):
@@ -1047,7 +1047,7 @@ Expected: PASS (5 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/concierge/orchestrator.py tests/test_orchestrator.py
+git add src/babbla/orchestrator.py tests/test_orchestrator.py
 git commit -m "feat: ask orchestrator with thread->session mapping and per-thread lock"
 ```
 
@@ -1056,11 +1056,11 @@ git commit -m "feat: ask orchestrator with thread->session mapping and per-threa
 ### Task 7: Slack adapter (Socket Mode, placeholder + edit, threading)
 
 **Files:**
-- Create: `src/concierge/slack_adapter.py`
+- Create: `src/babbla/slack_adapter.py`
 - Test: `tests/test_slack_adapter.py`
 
 **Interfaces:**
-- Consumes: `concierge.orchestrator.Orchestrator` + `UnknownSurfaceError`; `concierge.agent_runner.CitedAnswer`.
+- Consumes: `babbla.orchestrator.Orchestrator` + `UnknownSurfaceError`; `babbla.agent_runner.CitedAnswer`.
 - Produces:
   - `PLACEHOLDER = "🔎 looking into it…"` and `ERROR_TEXT = "⚠️ Couldn't answer that right now — please try again shortly."`
   - `def clean_mention_text(text: str) -> str` — strips a leading `<@U…>` bot mention.
@@ -1072,8 +1072,8 @@ git commit -m "feat: ask orchestrator with thread->session mapping and per-threa
 ```python
 import pytest
 
-from concierge.agent_runner import CitedAnswer
-from concierge.slack_adapter import (
+from babbla.agent_runner import CitedAnswer
+from babbla.slack_adapter import (
     ERROR_TEXT,
     PLACEHOLDER,
     clean_mention_text,
@@ -1149,9 +1149,9 @@ async def test_process_ask_passes_is_dm():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_slack_adapter.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'concierge.slack_adapter'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'babbla.slack_adapter'`.
 
-- [ ] **Step 3: Write `src/concierge/slack_adapter.py`**
+- [ ] **Step 3: Write `src/babbla/slack_adapter.py`**
 
 ```python
 from __future__ import annotations
@@ -1160,7 +1160,7 @@ import asyncio
 import logging
 import re
 
-from concierge.orchestrator import Orchestrator
+from babbla.orchestrator import Orchestrator
 
 logger = logging.getLogger(__name__)
 
@@ -1237,7 +1237,7 @@ Expected: PASS (4 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/concierge/slack_adapter.py tests/test_slack_adapter.py
+git add src/babbla/slack_adapter.py tests/test_slack_adapter.py
 git commit -m "feat: slack adapter with placeholder/edit, threading, error path"
 ```
 
@@ -1246,7 +1246,7 @@ git commit -m "feat: slack adapter with placeholder/edit, threading, error path"
 ### Task 8: App wiring & entrypoint
 
 **Files:**
-- Create: `src/concierge/app.py`
+- Create: `src/babbla/app.py`
 - Test: `tests/test_app.py`
 
 **Interfaces:**
@@ -1261,8 +1261,8 @@ git commit -m "feat: slack adapter with placeholder/edit, threading, error path"
 ```python
 import pytest
 
-from concierge.app import build_orchestrator, load_secrets
-from concierge.orchestrator import Orchestrator
+from babbla.app import build_orchestrator, load_secrets
+from babbla.orchestrator import Orchestrator
 
 ENV = {
     "SLACK_BOT_TOKEN": "xoxb-x",
@@ -1308,9 +1308,9 @@ def test_build_orchestrator(tmp_path):
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_app.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'concierge.app'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'babbla.app'`.
 
-- [ ] **Step 3: Write `src/concierge/app.py`**
+- [ ] **Step 3: Write `src/babbla/app.py`**
 
 ```python
 from __future__ import annotations
@@ -1320,12 +1320,12 @@ import logging
 import os
 from typing import Mapping
 
-from concierge.agent_runner import AgentRunner, Secrets
-from concierge.config import load_config
-from concierge.orchestrator import Orchestrator
-from concierge.read_only import DEFAULT_MODEL
-from concierge.session_store import SessionStore
-from concierge.slack_adapter import register_handlers
+from babbla.agent_runner import AgentRunner, Secrets
+from babbla.config import load_config
+from babbla.orchestrator import Orchestrator
+from babbla.read_only import DEFAULT_MODEL
+from babbla.session_store import SessionStore
+from babbla.slack_adapter import register_handlers
 
 logger = logging.getLogger(__name__)
 
@@ -1340,7 +1340,7 @@ def load_secrets(env: Mapping[str, str]) -> Secrets:
         github_token=env["GITHUB_TOKEN"],
         agentmemory_url=env.get("AGENTMEMORY_URL", "http://localhost:3111"),
         agentmemory_secret=env.get("AGENTMEMORY_SECRET", ""),
-        model=env.get("CONCIERGE_MODEL", DEFAULT_MODEL),
+        model=env.get("BABBLA_MODEL", DEFAULT_MODEL),
     )
 
 
@@ -1358,14 +1358,14 @@ async def main() -> None:
 
     secrets = load_secrets(os.environ)
     orchestrator = build_orchestrator(
-        config_path=os.environ.get("CONCIERGE_CONFIG", "config/channels.yaml"),
-        db_path=os.environ.get("CONCIERGE_DB", "concierge.db"),
+        config_path=os.environ.get("BABBLA_CONFIG", "config/channels.yaml"),
+        db_path=os.environ.get("BABBLA_DB", "babbla.db"),
         secrets=secrets,
     )
     app = AsyncApp(token=os.environ["SLACK_BOT_TOKEN"])
     register_handlers(app, orchestrator)
     handler = AsyncSocketModeHandler(app, os.environ["SLACK_APP_TOKEN"])
-    logger.info("Project Concierge (MyTV Q&A pilot) starting in Socket Mode…")
+    logger.info("Babbla (MyTV Q&A pilot) starting in Socket Mode…")
     await handler.start_async()
 
 
@@ -1386,7 +1386,7 @@ Expected: PASS (all unit tests across Tasks 1–8).
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/concierge/app.py tests/test_app.py
+git add src/babbla/app.py tests/test_app.py
 git commit -m "feat: app wiring, secrets loading, Socket Mode entrypoint"
 ```
 
@@ -1399,7 +1399,7 @@ git commit -m "feat: app wiring, secrets loading, Socket Mode entrypoint"
 - Create: `README.md`
 
 **Interfaces:**
-- Consumes: `concierge.agent_runner.AgentRunner` + `Secrets`; `concierge.config.ProjectBinding`. Uses the **real** `claude_agent_sdk.query` (no stub) and live MCP servers.
+- Consumes: `babbla.agent_runner.AgentRunner` + `Secrets`; `babbla.config.ProjectBinding`. Uses the **real** `claude_agent_sdk.query` (no stub) and live MCP servers.
 - Produces: a `@pytest.mark.integration` test that asks the live public MyTV repo a known question and asserts the answer references a GitHub citation; plus operator run docs.
 
 - [ ] **Step 1: Write the integration test `tests/test_smoke.py`**
@@ -1410,8 +1410,8 @@ import re
 
 import pytest
 
-from concierge.agent_runner import AgentRunner, Secrets
-from concierge.config import ProjectBinding
+from babbla.agent_runner import AgentRunner, Secrets
+from babbla.config import ProjectBinding
 
 BINDING = ProjectBinding("MyTV", "Wkkkkk", "MyTV", "public", None, True)
 
@@ -1445,7 +1445,7 @@ Expected: PASS — the answer text contains a `github.com/Wkkkkk/MyTV/(commit|pu
 - [ ] **Step 3: Write `README.md`**
 
 ````markdown
-# Project Concierge — MyTV Q&A Pilot
+# Babbla — MyTV Q&A Pilot
 
 Read-only Slack assistant: ask natural-language questions about the MyTV project and get
 answers cited to commits/PRs/files — drawn from the GitHub remote, never a local working tree.
@@ -1466,7 +1466,7 @@ cp .env.example .env   # fill in real tokens (never commit .env)
 ## Run
 ```bash
 set -a && source .env && set +a
-.venv/bin/python -m concierge.app
+.venv/bin/python -m babbla.app
 ```
 
 ## Test
@@ -1478,7 +1478,7 @@ set -a && source .env && set +a
 ## Read-only safety
 The agent is granted only read tools from two MCP servers — `github` (`GITHUB_READ_ONLY=1`,
 stdio) and `agentmemory` (four reader tools only). `permission_mode="dontAsk"` hard-denies
-anything off the allowlist. See `src/concierge/read_only.py` and the guard test
+anything off the allowlist. See `src/babbla/read_only.py` and the guard test
 `tests/test_read_only_guard.py`.
 ````
 

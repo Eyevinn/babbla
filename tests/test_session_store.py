@@ -1,4 +1,4 @@
-from concierge.session_store import SessionStore
+from babbla.session_store import SessionStore
 
 
 async def test_put_then_get_roundtrip(tmp_path):

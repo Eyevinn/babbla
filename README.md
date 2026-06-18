@@ -16,7 +16,7 @@ The agent is granted **only read tools** from two MCP servers — `github`
 `permission_mode="dontAsk"`, which **hard-denies** anything off the allowlist (no interactive
 prompts on a headless server, no `bypassPermissions`). It reads the GitHub **remote**, so a
 host's uncommitted/untracked/gitignored files are structurally invisible. The enforcement is
-pinned by a regression test: see [`src/concierge/read_only.py`](src/concierge/read_only.py) and
+pinned by a regression test: see [`src/babbla/read_only.py`](src/babbla/read_only.py) and
 [`tests/test_read_only_guard.py`](tests/test_read_only_guard.py).
 
 ## Prerequisites
@@ -57,7 +57,7 @@ Map the channel/DM to a project in [`config/channels.yaml`](config/channels.yaml
 
 ```bash
 set -a && source .env && set +a
-.venv/bin/python -m concierge.app
+.venv/bin/python -m babbla.app
 ```
 
 @-mention the bot in its channel, or DM it, with a question about the project. It posts a

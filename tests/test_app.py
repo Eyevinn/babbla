@@ -1,7 +1,7 @@
 import pytest
 
-from concierge.app import build_orchestrator, load_secrets
-from concierge.orchestrator import Orchestrator
+from babbla.app import build_orchestrator, load_secrets
+from babbla.orchestrator import Orchestrator
 
 ENV = {
     "SLACK_BOT_TOKEN": "xoxb-x",

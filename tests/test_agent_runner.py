@@ -1,7 +1,7 @@
 import pytest
 
-from concierge.agent_runner import AgentRunner, CitedAnswer, Secrets
-from concierge.config import ProjectBinding
+from babbla.agent_runner import AgentRunner, CitedAnswer, Secrets
+from babbla.config import ProjectBinding
 
 BINDING = ProjectBinding("MyTV", "Wkkkkk", "MyTV", "public", "C123", True)
 SECRETS = Secrets(github_token="ghp_x", agentmemory_url="http://localhost:3111", agentmemory_secret="")

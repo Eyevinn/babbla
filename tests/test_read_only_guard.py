@@ -1,6 +1,6 @@
 import pytest
 
-from concierge.read_only import (
+from babbla.read_only import (
     AGENTMEMORY_READERS,
     AGENTMEMORY_WRITERS,
     ALLOWED_TOOLS,

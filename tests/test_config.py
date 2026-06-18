@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from concierge.config import Config, ProjectBinding, load_config
+from babbla.config import Config, ProjectBinding, load_config
 
 FIXTURE = """
 projects:
