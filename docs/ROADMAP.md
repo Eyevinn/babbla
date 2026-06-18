@@ -75,10 +75,12 @@ cycle when reached.
 
 ### Phase 1 — Read-inputs hardening
 
-- [ ] Ensure the agent actually consumes the full set of existing surfaces (`README`,
+- [x] Ensure the agent actually consumes the full set of existing surfaces (`README`,
   `CLAUDE.md`, `docs/`, architecture notes, ADRs, PR bodies, issues, commits) — verify and, if
   needed, extend the system prompt and the GitHub toolset. This operationalizes "repo = source
-  of truth." Small.
+  of truth." Small. _(Done: system prompt now names the repo "why" surfaces and demotes
+  agentmemory to optional enrichment; GitHub toolset (`repos,pull_requests,issues`) already
+  covered them and is now pinned by a guard test.)_
 
 ### Phase 2 — `audit-repo.sh` (onboarding routine)
 

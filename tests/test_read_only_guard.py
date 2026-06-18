@@ -58,6 +58,15 @@ def test_github_server_is_readonly_stdio(cfg):
     assert gh["env"]["GITHUB_PERSONAL_ACCESS_TOKEN"] == "ghp_dummy"
 
 
+def test_github_toolsets_cover_why_surfaces(cfg):
+    # The github toolset must expose the surfaces that carry "why": repo files
+    # (README/CLAUDE.md/docs/ADRs/commits), pull requests, and issues. Trimming
+    # any of these would silently degrade answers (ADR 0009).
+    toolsets = cfg.mcp_servers["github"]["env"]["GITHUB_TOOLSETS"]
+    enabled = {t.strip() for t in toolsets.split(",")}
+    assert {"repos", "pull_requests", "issues"} <= enabled
+
+
 def test_agentmemory_server_configured(cfg):
     am = cfg.mcp_servers["agentmemory"]
     assert am["command"] == "npx"
@@ -74,3 +83,29 @@ def test_default_model(cfg):
 
 def test_system_prompt_names_repo(cfg):
     assert "Wkkkkk/MyTV" in cfg.system_prompt
+
+
+def test_system_prompt_directs_to_repo_why_surfaces(cfg):
+    # ADR 0009: the repo is the source of truth for "why". The prompt must point
+    # the agent at the repo-resident surfaces that carry rationale, not leave it
+    # to discover them.
+    prompt = cfg.system_prompt
+    for surface in ("README", "CLAUDE.md", "docs/", "docs/adr"):
+        assert surface in prompt, f"prompt does not mention the {surface} surface"
+
+
+def test_system_prompt_covers_history_surfaces(cfg):
+    # The full set of pushed-history surfaces that carry "why": commit messages,
+    # PR descriptions, and issues.
+    prompt = cfg.system_prompt.lower()
+    assert "commit message" in prompt
+    assert "pull request" in prompt
+    assert "issue" in prompt
+
+
+def test_system_prompt_frames_agentmemory_as_optional_enrichment(cfg):
+    # ADR 0009: agentmemory is optional local enrichment, not a required, co-equal
+    # source. The prompt must not promise it carries the "why"; it may be empty.
+    prompt = cfg.system_prompt
+    assert "agentmemory" in prompt.lower()
+    assert "optional" in prompt.lower() or "enrich" in prompt.lower()
