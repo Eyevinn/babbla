@@ -61,16 +61,17 @@ cycle when reached.
 
 ### Phase 0 — Foundation (now; low-risk; unblocks a second project)
 
-- [ ] **Code cleanups.** Parameterize the agent-runner no-answer fallback — it hardcodes
+- [x] **Code cleanups.** Parameterize the agent-runner no-answer fallback — it hardcodes
   "MyTV" (`src/babbla/agent_runner.py:77`); it must name the bound project. Bound the
   orchestrator `_locks` dict so it doesn't grow unbounded (`src/babbla/orchestrator.py:18`).
-  The first one literally blocks onboarding a second project.
-- [ ] **Write the ADRs** to `docs/adr/`: the 8 decided-but-unwritten decisions, **plus** the
+  The first one literally blocks onboarding a second project. _(Done in `51ec467`.)_
+- [x] **Write the ADRs** to `docs/adr/`: the 8 decided-but-unwritten decisions, **plus** the
   revised local-first ADR and the new repo-as-source-of-truth ADR above.
-- [ ] **Advisory recommendations doc** — a short "Getting the most out of Babbla" guide for
+  _(Done: `docs/adr/0001`–`0010` + index.)_
+- [x] **Advisory recommendations doc** — a short "Getting the most out of Babbla" guide for
   subject-project teams (descriptive PR bodies; keep `README`/`CLAUDE.md`/`docs/` current;
   ADRs for notable decisions; optionally run agentmemory locally as a drafting aid).
-  Explicitly framed as recommendations, not requirements.
+  Explicitly framed as recommendations, not requirements. _(Done: [`RECOMMENDATIONS.md`](RECOMMENDATIONS.md).)_
 
 ### Phase 1 — Read-inputs hardening
 
