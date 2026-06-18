@@ -30,7 +30,10 @@ Format is lightweight [Nygard-style](https://cognitect.com/blog/2011/11/15/docum
 | [0008](0008-release-anchored-digests.md) | Release-anchored Digests on a launchd heartbeat | Accepted |
 | [0009](0009-repo-is-source-of-truth-for-why.md) | The project repo is the source of truth for "why"; agentmemory is optional local enrichment | Accepted |
 | [0010](0010-migration-is-ordinary-work.md) | Always-on migration is ordinary work, not blocked on agentmemory centralization | Accepted |
+| [0011](0011-always-on-container-hosting.md) | Always-on container hosting | Accepted |
+| [0012](0012-digest-anchor-sourcing.md) | Digest anchor sourcing via per-project branch/deploy config | Accepted |
 
 ADRs 0001–0008 were decided on 2026-06-18 and written from the design proposal
 ([`../PROPOSAL-design.md`](../PROPOSAL-design.md)). ADRs 0009–0010 capture the
 organizing principle adopted the same day (see [`../ROADMAP.md`](../ROADMAP.md)).
+ADRs 0011–0012 close out Phase 3 (always-on container + scheduled digest anchors).

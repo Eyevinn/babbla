@@ -3,13 +3,20 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from datetime import datetime, timezone
 from typing import Mapping
+
+from slack_sdk.web.async_client import AsyncWebClient  # noqa: F401  (type only; client comes from AsyncApp)
 
 from babbla.agent_runner import AgentRunner, Secrets
 from babbla.config import load_config
+from babbla.digest.anchors import make_get_json
+from babbla.digest.poster import SlackPoster
+from babbla.digest.runner import DigestRunner
+from babbla.digest.scheduler import DigestScheduler
 from babbla.orchestrator import Orchestrator
 from babbla.read_only import DEFAULT_MODEL
-from babbla.session_store import SessionStore
+from babbla.session_store import DigestStateStore, SessionStore
 from babbla.slack_adapter import register_handlers
 
 logger = logging.getLogger(__name__)
@@ -29,6 +36,7 @@ def load_secrets(env: Mapping[str, str]) -> Secrets:
         agentmemory_url=env.get("AGENTMEMORY_URL", "http://localhost:3111"),
         agentmemory_secret=env.get("AGENTMEMORY_SECRET", ""),
         model=env.get("BABBLA_MODEL", DEFAULT_MODEL),
+        github_launcher=env.get("BABBLA_GITHUB_MCP", "docker"),
     )
 
 
@@ -39,21 +47,42 @@ def build_orchestrator(*, config_path: str, db_path: str, secrets: Secrets) -> O
     return Orchestrator(config, runner, store)
 
 
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def build_scheduler(*, config, secrets: Secrets, db_path: str, client) -> DigestScheduler:
+    return DigestScheduler(
+        config=config,
+        store=DigestStateStore(db_path),
+        runner=DigestRunner(AgentRunner(secrets)),
+        poster=SlackPoster(client),
+        get_json=make_get_json(secrets.github_token),
+        now_fn=_utcnow,
+    )
+
+
 async def main() -> None:
     logging.basicConfig(level=logging.INFO)
     from slack_bolt.async_app import AsyncApp
     from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 
     secrets = load_secrets(os.environ)
-    orchestrator = build_orchestrator(
-        config_path=os.environ.get("BABBLA_CONFIG", "config/channels.yaml"),
-        db_path=os.environ.get("BABBLA_DB", "babbla.db"),
-        secrets=secrets,
-    )
+    config_path = os.environ.get("BABBLA_CONFIG", "config/channels.yaml")
+    db_path = os.environ.get("BABBLA_DB", "babbla.db")
+    config = load_config(config_path)
+    runner = AgentRunner(secrets)
+    store = SessionStore(db_path)
+    orchestrator = Orchestrator(config, runner, store)
+
     app = AsyncApp(token=os.environ["SLACK_BOT_TOKEN"])
     register_handlers(app, orchestrator)
+
+    scheduler = build_scheduler(config=config, secrets=secrets, db_path=db_path, client=app.client)
+    scheduler_task = asyncio.create_task(scheduler.run())  # retained for the process lifetime
+
     handler = AsyncSocketModeHandler(app, os.environ["SLACK_APP_TOKEN"])
-    logger.info("Babbla (MyTV Q&A pilot) starting in Socket Mode…")
+    logger.info("Babbla starting in Socket Mode (digest scheduler active)…")
     await handler.start_async()
 
 

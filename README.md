@@ -70,6 +70,18 @@ set -a && source .env && set +a
 placeholder, then edits in a cited answer in-thread; follow-ups in the same thread continue the
 conversation.
 
+### Always-on / container
+
+Babbla also ships as a container (Socket Mode → no inbound port). Build and run
+locally with your Claude subscription (no API key needed):
+
+```bash
+docker compose up --build
+```
+
+For server hosting (Eyevinn OSC) and the headless-auth story, see
+[`docs/DEPLOY.md`](docs/DEPLOY.md).
+
 ## Test
 
 ```bash
