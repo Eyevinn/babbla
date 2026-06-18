@@ -110,3 +110,60 @@ class DigestStateStore:
 
     def close(self) -> None:
         self._conn.close()
+
+
+_LOBBY_SCHEMA = """
+CREATE TABLE IF NOT EXISTS lobby_threads (
+    thread_ts    TEXT PRIMARY KEY,
+    project_name TEXT NOT NULL,
+    updated_at   REAL NOT NULL
+)
+"""
+
+
+class LobbyThreadStore:
+    """Remembers which project a Lobby thread was routed to, so follow-ups stay sticky."""
+
+    def __init__(
+        self,
+        db_path: str,
+        ttl_seconds: int = 86400,
+        time_fn: Callable[[], float] = time.time,
+    ) -> None:
+        self._ttl = ttl_seconds
+        self._now = time_fn
+        self._conn = sqlite3.connect(db_path, check_same_thread=False)
+        self._conn.execute(_LOBBY_SCHEMA)
+        self._conn.commit()
+
+    async def get(self, thread_ts: str) -> str | None:
+        return await asyncio.to_thread(self._get_sync, thread_ts)
+
+    def _get_sync(self, thread_ts: str) -> str | None:
+        row = self._conn.execute(
+            "SELECT project_name, updated_at FROM lobby_threads WHERE thread_ts = ?",
+            (thread_ts,),
+        ).fetchone()
+        if row is None:
+            return None
+        project_name, updated_at = row
+        if self._now() - updated_at > self._ttl:
+            self._conn.execute("DELETE FROM lobby_threads WHERE thread_ts = ?", (thread_ts,))
+            self._conn.commit()
+            return None
+        return project_name
+
+    async def put(self, thread_ts: str, project_name: str) -> None:
+        await asyncio.to_thread(self._put_sync, thread_ts, project_name)
+
+    def _put_sync(self, thread_ts: str, project_name: str) -> None:
+        self._conn.execute(
+            "INSERT INTO lobby_threads (thread_ts, project_name, updated_at) VALUES (?, ?, ?) "
+            "ON CONFLICT(thread_ts) DO UPDATE SET project_name = excluded.project_name, "
+            "updated_at = excluded.updated_at",
+            (thread_ts, project_name, self._now()),
+        )
+        self._conn.commit()
+
+    def close(self) -> None:
+        self._conn.close()
