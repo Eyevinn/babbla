@@ -11,7 +11,3 @@ venv/
 *.db
 *.sqlite3
 
-# Proposals (kept local, not tracked)
-PROPOSAL.md
-PROPOSAL-design.md
-PROPOSAL-pitch.md
