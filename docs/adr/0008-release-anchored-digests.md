@@ -1,6 +1,9 @@
 # ADR 0008: Release-anchored Digests on a launchd heartbeat
 
-- **Status:** Accepted
+- **Status:** Accepted. Anchor *sourcing* for the minimal digest is specified by
+  [0012](0012-digest-anchor-sourcing.md) (per-project `branch`/`deploy` over the
+  read-only GitHub path); the launchd heartbeat is realized as an in-process
+  scheduler.
 - **Date:** 2026-06-18
 - **Deciders:** Kun Wu
 

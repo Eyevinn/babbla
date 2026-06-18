@@ -91,9 +91,11 @@ cycle when reached.
 
 ### Phase 3 — Always-on Babbla (the infra remnant of the wall)
 
-- [ ] Host the thin connector on a server so a sleeping laptop no longer drops Asks/Digests.
-  Resolve the runtime-auth question (below); move the launchd digest heartbeat to a server
-  timer/cron. Small, because there is no agentmemory to centralize.
+- [x] Host the thin connector on a server so a sleeping laptop no longer drops
+  Asks/Digests. _(Done: portable container (`Dockerfile`) → Eyevinn OSC; headless
+  auth via a single injected `ANTHROPIC_API_KEY` (open question #1 resolved);
+  in-process digest scheduler with per-project `branch`/`deploy` anchors. See
+  `docs/superpowers/specs/2026-06-18-always-on-babbla-design.md`, ADRs 0011–0012.)_
 
 ### Phase 4 — Lobby + Subscriptions / Visibility (new feature subsystem)
 
@@ -104,10 +106,13 @@ cycle when reached.
 
 ## Open questions
 
-1. **Runtime auth on a server (Phase 3).** Path B (Claude CLI subscription login) is
+1. ~~**Runtime auth on a server (Phase 3).** Path B (Claude CLI subscription login) is
    user/laptop-bound. A headless server likely reintroduces an `ANTHROPIC_API_KEY` or service
    account — which the pilot deliberately dropped from required env. Decide the headless-auth
-   story before hosting.
+   story before hosting.~~ **Resolved by [ADR 0011](adr/0011-always-on-container-hosting.md):**
+   a single shared `ANTHROPIC_API_KEY` service key is injected as an OSC secret; Path B
+   continues locally. Digests are realized in-process by the scheduler (no launchd required on
+   the server).
 2. **Public-repo "why" is public.** Repo-resident "why" on a public project (e.g. MyTV) is
    public by construction. Fine for OSS; it removes the option of internal-only rationale on a
    public repo. Acceptable under the no-pollution stance, but worth a conscious confirmation.

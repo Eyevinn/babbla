@@ -2,7 +2,9 @@
 
 - **Status:** Accepted. The deployment decision (laptop + Socket Mode) stands; the
   *"agentmemory centralization is the migration blocker"* rationale is
-  **superseded by [0010](0010-migration-is-ordinary-work.md)**.
+  **superseded by [0010](0010-migration-is-ordinary-work.md)**. The deployment
+  *locality* (laptop) is itself superseded by [0011](0011-always-on-container-hosting.md)
+  — Babbla now runs always-on in a container; Socket Mode + SQLite still hold.
 - **Date:** 2026-06-18
 - **Deciders:** Kun Wu
 
