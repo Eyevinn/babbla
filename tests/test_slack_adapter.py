@@ -6,8 +6,10 @@ from babbla.agent_runner import CitedAnswer
 from babbla.slack_adapter import (
     ERROR_TEXT,
     PLACEHOLDER,
+    _is_lobby,
     clean_mention_text,
     process_ask,
+    process_lobby_ask,
     register_handlers,
 )
 
@@ -187,3 +189,66 @@ async def test_dm_message_handler_ignores_bot_echo():
     await asyncio.sleep(0)
 
     assert len(orch.calls) == 0
+
+
+# ---------------------------------------------------------------------------
+# Lobby dispatch tests (Task 6)
+# ---------------------------------------------------------------------------
+
+
+def test_is_lobby():
+    assert _is_lobby("C0LOBBY", "C0LOBBY") is True
+    assert _is_lobby("C123", "C0LOBBY") is False
+    assert _is_lobby("C123", None) is False
+
+
+async def test_process_lobby_ask_posts_answer():
+    client = FakeClient()
+
+    class LobbyOrch:
+        async def handle_lobby_ask(self, *, text, thread_ts):
+            return CitedAnswer(text="routed answer ↪ <#C123>", session_id="s1")
+
+    await process_lobby_ask(
+        text="q", channel="C0LOBBY", thread_ts="t1", client=client, orchestrator=LobbyOrch()
+    )
+    assert client.posted["text"] == PLACEHOLDER
+    assert client.updates[-1]["text"] == "routed answer ↪ <#C123>"
+
+
+async def test_register_handlers_dispatches_lobby_vs_ask():
+    class FakeApp:
+        def __init__(self):
+            self.handlers = {}
+
+        def event(self, name):
+            def deco(fn):
+                self.handlers[name] = fn
+                return fn
+            return deco
+
+    class DualOrch:
+        def __init__(self):
+            self.lobby_calls = []
+            self.ask_calls = []
+
+        async def handle_lobby_ask(self, *, text, thread_ts):
+            self.lobby_calls.append(text)
+            return CitedAnswer(text="lobby", session_id=None)
+
+        async def handle_ask(self, *, text, thread_ts, channel_id, is_dm):
+            self.ask_calls.append((text, channel_id))
+            return CitedAnswer(text="ask", session_id=None)
+
+    app, orch, client = FakeApp(), DualOrch(), FakeClient()
+    register_handlers(app, orch, lobby_channel_id="C0LOBBY")
+    mention = app.handlers["app_mention"]
+
+    await mention({"channel": "C0LOBBY", "ts": "t1", "text": "<@U> hi"}, client)
+    await mention({"channel": "C999", "ts": "t2", "text": "<@U> hey"}, client)
+    # drain the tasks _spawn scheduled
+    pending = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+    await asyncio.gather(*pending)
+
+    assert orch.lobby_calls == ["hi"]
+    assert orch.ask_calls == [("hey", "C999")]
