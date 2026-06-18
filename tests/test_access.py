@@ -46,3 +46,14 @@ def test_public_and_internal_decisions_are_identical():
 def test_surface_value_roundtrip():
     assert Surface("dm") is Surface.DM
     assert Surface.CHANNEL.value == "channel"
+
+
+@pytest.mark.parametrize("visibility", ["public", "internal"])
+def test_lobby_allows_public_and_internal(visibility):
+    assert authorize_ask(_binding(visibility), Surface.LOBBY).allowed is True
+
+
+def test_lobby_denies_private_and_points():
+    d = authorize_ask(_binding("private", "C123"), Surface.LOBBY)
+    assert d.allowed is False
+    assert "<#C123>" in d.pointer

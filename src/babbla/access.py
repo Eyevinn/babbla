@@ -11,7 +11,7 @@ _OPEN_TIERS = {"public", "internal"}
 class Surface(Enum):
     CHANNEL = "channel"  # a project's bound Slack channel
     DM = "dm"            # Private Ask (1:1)
-    # LOBBY = "lobby"    # added by the Lobby slice
+    LOBBY = "lobby"      # open discovery surface (non-channel)
 
 
 @dataclass(frozen=True)
