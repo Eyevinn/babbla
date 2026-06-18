@@ -56,3 +56,14 @@ async def test_run_ask_resume_sets_session():
     ans = await runner.run_ask("follow up", BINDING, resume_session_id="sess-old")
     assert captured["options"].resume == "sess-old"
     assert ans.session_id == "sess-resumed"
+
+
+async def test_no_answer_fallback_names_the_bound_project():
+    # When the agent yields no text, the fallback must name the bound project,
+    # not a hardcoded "MyTV" — onboarding a second project depends on this.
+    other = ProjectBinding("Acme", "acme-org", "acme", "public", "C999", False)
+    captured = {}
+    runner = AgentRunner(SECRETS, query_fn=make_query_fn(captured, result=None))
+    ans = await runner.run_ask("anything?", other, resume_session_id=None)
+    assert "Acme" in ans.text
+    assert "MyTV" not in ans.text

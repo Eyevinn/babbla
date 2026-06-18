@@ -24,6 +24,15 @@ class Orchestrator:
             self._locks[thread_ts] = lock
         return lock
 
+    def _release_lock(self, thread_ts: str) -> None:
+        # Drop the lock once the thread is idle so `_locks` can't grow without
+        # bound over the life of the process. A still-held lock or one with a
+        # queued waiter means another ask in this thread is in flight — keep it.
+        lock = self._locks.get(thread_ts)
+        if lock is None or lock.locked() or lock._waiters:
+            return
+        del self._locks[thread_ts]
+
     def _resolve(self, channel_id: str, is_dm: bool) -> ProjectBinding:
         binding = self._config.for_dm() if is_dm else self._config.for_channel(channel_id)
         if binding is None:
@@ -36,9 +45,12 @@ class Orchestrator:
         self, *, text: str, thread_ts: str, channel_id: str, is_dm: bool
     ) -> CitedAnswer:
         binding = self._resolve(channel_id, is_dm)
-        async with self._lock_for(thread_ts):
-            resume_session_id = await self._store.get_session(thread_ts)
-            answer = await self._runner.run_ask(text, binding, resume_session_id)
-            if answer.session_id:
-                await self._store.put_session(thread_ts, answer.session_id)
+        try:
+            async with self._lock_for(thread_ts):
+                resume_session_id = await self._store.get_session(thread_ts)
+                answer = await self._runner.run_ask(text, binding, resume_session_id)
+                if answer.session_id:
+                    await self._store.put_session(thread_ts, answer.session_id)
             return answer
+        finally:
+            self._release_lock(thread_ts)

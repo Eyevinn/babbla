@@ -73,7 +73,8 @@ class AgentRunner:
             if sid:
                 session_id = sid
 
+        fallback = f"I don't know — I couldn't find anything in {binding.name}'s history."
         return CitedAnswer(
-            text=last_text or "I don't know — I couldn't find anything in MyTV's history.",
+            text=last_text or fallback,
             session_id=session_id,
         )

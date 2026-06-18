@@ -83,3 +83,37 @@ async def test_per_thread_lock_serializes(store):
     # The second ask saw the session the first one stored.
     second_start = [o for o in order if o[0] == "start"][1]
     assert second_start[2] == "sess-1"
+
+
+async def test_locks_do_not_accumulate_across_threads(store):
+    # Each distinct thread must not leave a permanent lock behind, or a
+    # long-lived process leaks one lock per thread it ever served.
+    runner = FakeRunner()
+    orch = Orchestrator(CONFIG, runner, store)
+    for i in range(50):
+        await orch.handle_ask(
+            text="q", thread_ts=f"t{i}", channel_id="C123", is_dm=False
+        )
+    assert len(orch._locks) == 0
+
+
+async def test_concurrent_asks_in_one_thread_share_one_lock(store):
+    # While asks are in flight in the same thread they must share a lock
+    # (serialization), and it must be cleaned up once the thread is idle.
+    order = []
+
+    class SlowRunner:
+        async def run_ask(self, text, binding, resume_session_id):
+            order.append(len(orch._locks))
+            await asyncio.sleep(0.01)
+            return CitedAnswer(text=f"a-{text}", session_id="sess-1")
+
+    orch = Orchestrator(CONFIG, SlowRunner(), store)
+    await asyncio.gather(
+        orch.handle_ask(text="q1", thread_ts="t1", channel_id="C123", is_dm=False),
+        orch.handle_ask(text="q2", thread_ts="t1", channel_id="C123", is_dm=False),
+    )
+    # Exactly one lock existed while work was in flight (both asks shared it)...
+    assert order == [1, 1]
+    # ...and nothing is retained once the thread goes idle.
+    assert len(orch._locks) == 0
