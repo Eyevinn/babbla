@@ -1,3 +1,5 @@
+import dataclasses
+
 from babbla.audit.github_reader import CommitMsg, PrBody, RepoFacts
 
 
@@ -23,7 +25,6 @@ def test_repofacts_is_constructible_and_frozen():
     )
     assert facts.owner == "Wkkkkk"
     assert facts.commits[0].has_body is True
-    import dataclasses
     try:
         facts.owner = "x"  # frozen -> should raise
         raised = False
