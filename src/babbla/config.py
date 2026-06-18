@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 _CADENCES = {"daily", "weekly"}
 _ANCHORS = {"branch", "deploy"}
@@ -90,6 +93,13 @@ def load_config(path: str | os.PathLike) -> Config:
         )
         for p in raw.get("projects", [])
     )
+    for b in bindings:
+        if b.visibility == "private" and b.dm:
+            logger.warning(
+                "channels.yaml: project %r is private with dm: true — its DM surface "
+                "will always deny and point to the channel (a dead DM surface).",
+                b.name,
+            )
     if sum(1 for b in bindings if b.dm) > 1:
         raise ValueError("channels.yaml: exactly one project may set dm: true in the pilot")
     return Config(bindings=bindings)
