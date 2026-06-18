@@ -1,4 +1,9 @@
 # Maps Slack surfaces -> Project + repo coordinates. Version-controlled (no secrets).
+# Open discovery surface. Set to the Slack channel id of an open "lobby" channel
+# where anyone can ask without naming a project; Babbla routes the question to the
+# right project, answers public/internal, and points to private projects' channels.
+# null = no lobby (the lobby path is inert).
+lobby_channel_id: null
 projects:
   - name: MyTV
     owner: Wkkkkk

@@ -4,6 +4,7 @@ import asyncio
 
 from babbla.access import Surface, authorize_ask
 from babbla.agent_runner import CitedAnswer
+from babbla import lobby
 from babbla.config import Config, ProjectBinding
 
 
@@ -12,10 +13,13 @@ class UnknownSurfaceError(Exception):
 
 
 class Orchestrator:
-    def __init__(self, config: Config, runner, store) -> None:
+    def __init__(self, config: Config, runner, store, *, catalog=(), classify_fn=None, lobby_store=None) -> None:
         self._config = config
         self._runner = runner
         self._store = store
+        self._catalog = catalog
+        self._classify_fn = classify_fn
+        self._lobby_store = lobby_store
         self._locks: dict[str, asyncio.Lock] = {}
 
     def _lock_for(self, thread_ts: str) -> asyncio.Lock:
@@ -60,3 +64,33 @@ class Orchestrator:
             return answer
         finally:
             self._release_lock(thread_ts)
+
+    async def _resolve_lobby(self, text: str, thread_ts: str):
+        sticky = await self._lobby_store.get(thread_ts)
+        if sticky is not None:
+            for entry in self._catalog:
+                if entry.binding.name == sticky:
+                    return entry
+            # sticky project no longer in the catalog → re-route
+        return await lobby.route(text, self._catalog, self._classify_fn)
+
+    async def handle_lobby_ask(self, *, text: str, thread_ts: str) -> CitedAnswer:
+        async with self._lock_for(thread_ts):
+            try:
+                entry = await self._resolve_lobby(text, thread_ts)
+                if entry is None:
+                    return CitedAnswer(text=lobby.discovery_reply(self._catalog), session_id=None)
+                decision = authorize_ask(entry.binding, Surface.LOBBY)
+                if not decision.allowed:
+                    return CitedAnswer(text=decision.pointer, session_id=None)
+                await self._lobby_store.put(thread_ts, entry.binding.name)
+                resume = await self._store.get_session(thread_ts)
+                answer = await self._runner.run_ask(text, entry.binding, resume)
+                if answer.session_id:
+                    await self._store.put_session(thread_ts, answer.session_id)
+                return CitedAnswer(
+                    text=answer.text + lobby.pointer_suffix(entry),
+                    session_id=answer.session_id,
+                )
+            finally:
+                self._release_lock(thread_ts)

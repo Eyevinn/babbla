@@ -1,4 +1,4 @@
-from babbla.session_store import SessionStore
+from babbla.session_store import SessionStore, LobbyThreadStore
 
 
 async def test_put_then_get_roundtrip(tmp_path):
@@ -42,3 +42,33 @@ async def test_persists_across_instances(tmp_path):
     store2 = SessionStore(path)
     assert await store2.get_session("t1") == "sess-abc"
     store2.close()
+
+
+async def test_lobby_store_roundtrip(tmp_path):
+    store = LobbyThreadStore(str(tmp_path / "s.db"))
+    await store.put("t1", "MyTV")
+    assert await store.get("t1") == "MyTV"
+    store.close()
+
+
+async def test_lobby_store_missing_returns_none(tmp_path):
+    store = LobbyThreadStore(str(tmp_path / "s.db"))
+    assert await store.get("nope") is None
+    store.close()
+
+
+async def test_lobby_store_overwrites(tmp_path):
+    store = LobbyThreadStore(str(tmp_path / "s.db"))
+    await store.put("t1", "MyTV")
+    await store.put("t1", "Other")
+    assert await store.get("t1") == "Other"
+    store.close()
+
+
+async def test_lobby_store_ttl_eviction(tmp_path):
+    clock = {"now": 1000.0}
+    store = LobbyThreadStore(str(tmp_path / "s.db"), ttl_seconds=100, time_fn=lambda: clock["now"])
+    await store.put("t1", "MyTV")
+    clock["now"] = 1101.0
+    assert await store.get("t1") is None
+    store.close()
