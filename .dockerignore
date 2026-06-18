@@ -4,6 +4,7 @@ __pycache__/
 .git/
 babbla.db
 .env
+config/
 tests/
 docs/
 .pytest_cache/
