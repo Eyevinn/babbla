@@ -47,6 +47,13 @@ def test_commit_messages_descriptive_rule():
     assert _find(_facts(commits=short_with_body), "commit messages").status == OK
 
 
+def test_pr_body_length_boundary():
+    at_80 = tuple(PrBody(80) for _ in range(20))      # none descriptive -> MISSING
+    at_81 = tuple(PrBody(81) for _ in range(20))      # all descriptive -> OK
+    assert _find(_facts(pr_bodies=at_80), "PR bodies").status == MISSING
+    assert _find(_facts(pr_bodies=at_81), "PR bodies").status == OK
+
+
 def test_thin_surface_carries_recommendation():
     f = _find(_facts(readme_bytes=None), "README")
     assert f.recommendation is not None and "RECOMMENDATIONS.md" in f.recommendation
