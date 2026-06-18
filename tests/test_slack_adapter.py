@@ -216,6 +216,20 @@ async def test_process_lobby_ask_posts_answer():
     assert client.updates[-1]["text"] == "routed answer ↪ <#C123>"
 
 
+async def test_process_lobby_ask_edits_to_error_on_failure():
+    client = FakeClient()
+
+    class FailingLobbyOrch:
+        async def handle_lobby_ask(self, *, text, thread_ts):
+            raise RuntimeError("boom")
+
+    await process_lobby_ask(
+        text="q", channel="C0LOBBY", thread_ts="t1", client=client, orchestrator=FailingLobbyOrch()
+    )
+    assert client.posted["text"] == PLACEHOLDER
+    assert client.updates[-1]["text"] == ERROR_TEXT
+
+
 async def test_register_handlers_dispatches_lobby_vs_ask():
     class FakeApp:
         def __init__(self):

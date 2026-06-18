@@ -48,7 +48,7 @@ async def process_lobby_ask(
         answer = await orchestrator.handle_lobby_ask(text=text, thread_ts=thread_ts)
         await client.chat_update(channel=channel, ts=ts, text=answer.text)
     except Exception:  # one failed Lobby ask must never crash the process
-        logger.exception("Lobby ask failed for thread %s", thread_ts)
+        logger.exception("Lobby ask failed for thread %s in channel %s", thread_ts, channel)
         await client.chat_update(channel=channel, ts=ts, text=ERROR_TEXT)
 
 
