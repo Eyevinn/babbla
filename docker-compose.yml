@@ -1,0 +1,14 @@
+# Local validation. Auth: omit ANTHROPIC_API_KEY to use your Claude subscription
+# (Path B). The github-mcp-server binary is baked into the image.
+services:
+  babbla:
+    build: .
+    env_file: [.env]            # SLACK_BOT_TOKEN, SLACK_APP_TOKEN, GITHUB_TOKEN, optional ANTHROPIC_API_KEY
+    volumes:
+      - ./config:/data:ro       # channels.yaml (read-only); see BABBLA_CONFIG
+      - babbla-state:/state
+    environment:
+      BABBLA_CONFIG: /data/channels.yaml
+      BABBLA_DB: /state/babbla.db
+volumes:
+  babbla-state:
