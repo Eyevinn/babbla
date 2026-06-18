@@ -19,6 +19,12 @@ host's uncommitted/untracked/gitignored files are structurally invisible. The en
 pinned by a regression test: see [`src/babbla/read_only.py`](src/babbla/read_only.py) and
 [`tests/test_read_only_guard.py`](tests/test_read_only_guard.py).
 
+## Roadmap
+
+This repo is the MyTV Q&A pilot. The post-pilot direction — how Babbla reads a project's "why"
+from the repo itself (so it needs no central memory service), and the phased plan from
+foundation work to multi-project support — lives in [`docs/ROADMAP.md`](docs/ROADMAP.md).
+
 ## Prerequisites
 
 - Python 3.12+
