@@ -2,8 +2,20 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import yaml
+
+_CADENCES = {"daily", "weekly"}
+_ANCHORS = {"branch", "deploy"}
+
+
+@dataclass(frozen=True)
+class DigestConfig:
+    cadence: str
+    tz: str
+    anchor: str
+    deploy_workflow: str | None = None
 
 
 @dataclass(frozen=True)
@@ -14,6 +26,7 @@ class ProjectBinding:
     visibility: str
     channel_id: str | None
     dm: bool
+    digest: DigestConfig | None = None
 
 
 @dataclass(frozen=True)
@@ -32,6 +45,35 @@ class Config:
                 return b
         return None
 
+    def digest_bindings(self) -> tuple[ProjectBinding, ...]:
+        return tuple(b for b in self.bindings if b.digest is not None and b.channel_id)
+
+
+def _parse_digest(name: str, raw: dict | None) -> DigestConfig | None:
+    if not raw:
+        return None
+    raw_cadence = raw.get("cadence", "off")
+    # PyYAML coerces bare `off`/`on`/`yes`/`no` to booleans; treat off/False as disabled.
+    if raw_cadence is False or str(raw_cadence).strip().lower() == "off":
+        return None
+    cadence = str(raw_cadence)
+    if cadence not in _CADENCES:
+        raise ValueError(f"{name}: digest.cadence must be one of off|daily|weekly, got {cadence!r}")
+    anchor = str(raw.get("anchor", ""))
+    if anchor not in _ANCHORS:
+        raise ValueError(f"{name}: digest.anchor must be one of branch|deploy, got {anchor!r}")
+    tz = str(raw.get("tz", "UTC"))
+    try:
+        ZoneInfo(tz)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise ValueError(f"{name}: digest.tz is not a valid time zone: {tz!r}") from exc
+    deploy_workflow = None
+    if anchor == "deploy":
+        deploy_workflow = (raw.get("deploy") or {}).get("workflow")
+        if not deploy_workflow:
+            raise ValueError(f"{name}: digest.anchor=deploy requires digest.deploy.workflow")
+    return DigestConfig(cadence=cadence, tz=tz, anchor=anchor, deploy_workflow=deploy_workflow)
+
 
 def load_config(path: str | os.PathLike) -> Config:
     with open(path, "r", encoding="utf-8") as fh:
@@ -44,6 +86,7 @@ def load_config(path: str | os.PathLike) -> Config:
             visibility=p["visibility"],
             channel_id=p.get("channel_id"),
             dm=bool(p.get("dm", False)),
+            digest=_parse_digest(p["name"], p.get("digest")),
         )
         for p in raw.get("projects", [])
     )
