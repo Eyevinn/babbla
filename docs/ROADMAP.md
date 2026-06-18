@@ -84,9 +84,10 @@ cycle when reached.
 
 ### Phase 2 — `audit-repo.sh` (onboarding routine)
 
-- [ ] The per-repo onboarding routine, reframed as "read a new repo's existing docs + history"
+- [x] The per-repo onboarding routine, reframed as "read a new repo's existing docs + history"
   so a project can be added cleanly (the by-hand MyTV audit is its prototype). Unlocks
-  onboarding the second spine project (the internal service).
+  onboarding the second spine project (the internal service). _(Done: `python -m babbla.audit`
+  / `audit-repo.sh`; see `docs/superpowers/specs/2026-06-18-audit-repo-design.md`.)_
 
 ### Phase 3 — Always-on Babbla (the infra remnant of the wall)
 
