@@ -68,6 +68,37 @@ def build_system_prompt(owner: str, repo: str) -> str:
     )
 
 
+def _github_server(token: str, launcher: str) -> dict:
+    env = {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": token,
+        "GITHUB_READ_ONLY": "1",
+        "GITHUB_TOOLSETS": "context,repos,pull_requests,issues",
+    }
+    if launcher == "binary":
+        return {"command": "github-mcp-server", "args": ["stdio"], "env": env}
+    if launcher == "docker":
+        return {
+            "command": "docker",
+            "args": [
+                "run", "-i", "--rm",
+                "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
+                "-e", "GITHUB_READ_ONLY",
+                "-e", "GITHUB_TOOLSETS",
+                "ghcr.io/github/github-mcp-server", "stdio",
+            ],
+            "env": env,
+        }
+    raise ValueError(f"unknown github_launcher: {launcher!r}")
+
+
+def _agentmemory_server(url: str, secret: str) -> dict:
+    return {
+        "command": "npx",
+        "args": ["-y", "@agentmemory/mcp"],
+        "env": {"AGENTMEMORY_URL": url, "AGENTMEMORY_SECRET": secret},
+    }
+
+
 def build_agent_config(
     *,
     owner: str,
@@ -76,42 +107,17 @@ def build_agent_config(
     agentmemory_url: str,
     agentmemory_secret: str,
     model: str = DEFAULT_MODEL,
+    github_launcher: str = "docker",
 ) -> AgentConfig:
-    mcp_servers = {
-        "github": {
-            "command": "docker",
-            "args": [
-                "run",
-                "-i",
-                "--rm",
-                "-e",
-                "GITHUB_PERSONAL_ACCESS_TOKEN",
-                "-e",
-                "GITHUB_READ_ONLY",
-                "-e",
-                "GITHUB_TOOLSETS",
-                "ghcr.io/github/github-mcp-server",
-                "stdio",
-            ],
-            "env": {
-                "GITHUB_PERSONAL_ACCESS_TOKEN": github_token,
-                "GITHUB_READ_ONLY": "1",
-                "GITHUB_TOOLSETS": "context,repos,pull_requests,issues",
-            },
-        },
-        "agentmemory": {
-            "command": "npx",
-            "args": ["-y", "@agentmemory/mcp"],
-            "env": {
-                "AGENTMEMORY_URL": agentmemory_url,
-                "AGENTMEMORY_SECRET": agentmemory_secret,
-            },
-        },
-    }
+    mcp_servers = {"github": _github_server(github_token, github_launcher)}
+    allowed_tools: tuple[str, ...] = (GITHUB_WILDCARD,)
+    if agentmemory_url:  # agentmemory is OPTIONAL local enrichment (ADR 0009)
+        mcp_servers["agentmemory"] = _agentmemory_server(agentmemory_url, agentmemory_secret)
+        allowed_tools = ALLOWED_TOOLS
     return AgentConfig(
         model=model,
         system_prompt=build_system_prompt(owner, repo),
-        allowed_tools=ALLOWED_TOOLS,
+        allowed_tools=allowed_tools,
         permission_mode="dontAsk",
         mcp_servers=mcp_servers,
     )

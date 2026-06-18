@@ -20,6 +20,7 @@ class Secrets:
     agentmemory_url: str
     agentmemory_secret: str
     model: str = DEFAULT_MODEL
+    github_launcher: str = "docker"
 
 
 def _extract_text(message) -> str | None:
@@ -52,6 +53,7 @@ class AgentRunner:
             agentmemory_url=self._secrets.agentmemory_url,
             agentmemory_secret=self._secrets.agentmemory_secret,
             model=self._secrets.model,
+            github_launcher=self._secrets.github_launcher,
         )
         options = ClaudeAgentOptions(
             model=cfg.model,

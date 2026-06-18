@@ -29,6 +29,7 @@ def load_secrets(env: Mapping[str, str]) -> Secrets:
         agentmemory_url=env.get("AGENTMEMORY_URL", "http://localhost:3111"),
         agentmemory_secret=env.get("AGENTMEMORY_SECRET", ""),
         model=env.get("BABBLA_MODEL", DEFAULT_MODEL),
+        github_launcher=env.get("BABBLA_GITHUB_MCP", "docker"),
     )
 
 
