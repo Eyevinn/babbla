@@ -6,6 +6,7 @@ import os
 from datetime import datetime, timezone
 from typing import Mapping
 
+from claude_agent_sdk import query as _sdk_query
 from slack_sdk.web.async_client import AsyncWebClient  # noqa: F401  (type only; client comes from AsyncApp)
 
 from babbla.agent_runner import AgentRunner, Secrets
@@ -14,9 +15,10 @@ from babbla.digest.anchors import make_get_json
 from babbla.digest.poster import SlackPoster
 from babbla.digest.runner import DigestRunner
 from babbla.digest.scheduler import DigestScheduler
+from babbla.lobby import build_catalog, make_classify_fn
 from babbla.orchestrator import Orchestrator
 from babbla.read_only import DEFAULT_MODEL
-from babbla.session_store import DigestStateStore, SessionStore
+from babbla.session_store import DigestStateStore, LobbyThreadStore, SessionStore
 from babbla.slack_adapter import register_handlers
 
 logger = logging.getLogger(__name__)
@@ -40,11 +42,20 @@ def load_secrets(env: Mapping[str, str]) -> Secrets:
     )
 
 
-def build_orchestrator(*, config_path: str, db_path: str, secrets: Secrets) -> Orchestrator:
+def build_orchestrator(*, config_path: str, db_path: str, secrets: Secrets, get_json=None) -> Orchestrator:
     config = load_config(config_path)
     runner = AgentRunner(secrets)
     store = SessionStore(db_path)
-    return Orchestrator(config, runner, store)
+    if config.lobby_channel_id is None:
+        return Orchestrator(config, runner, store)
+    reader = get_json or make_get_json(secrets.github_token)
+    catalog = build_catalog([b for b in config.bindings], reader)
+    return Orchestrator(
+        config, runner, store,
+        catalog=catalog,
+        classify_fn=make_classify_fn(_sdk_query, secrets.model),
+        lobby_store=LobbyThreadStore(db_path),
+    )
 
 
 def _utcnow() -> datetime:
@@ -71,12 +82,10 @@ async def main() -> None:
     config_path = os.environ.get("BABBLA_CONFIG", "config/channels.yaml")
     db_path = os.environ.get("BABBLA_DB", "babbla.db")
     config = load_config(config_path)
-    runner = AgentRunner(secrets)
-    store = SessionStore(db_path)
-    orchestrator = Orchestrator(config, runner, store)
+    orchestrator = build_orchestrator(config_path=config_path, db_path=db_path, secrets=secrets)
 
     app = AsyncApp(token=os.environ["SLACK_BOT_TOKEN"])
-    register_handlers(app, orchestrator)
+    register_handlers(app, orchestrator, lobby_channel_id=config.lobby_channel_id)
 
     scheduler = build_scheduler(config=config, secrets=secrets, db_path=db_path, client=app.client)
     scheduler_task = asyncio.create_task(scheduler.run())  # retained for the process lifetime
