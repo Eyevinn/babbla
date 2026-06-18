@@ -9,3 +9,9 @@ projects:
     channel_id: null  # set to your Slack channel id
     # Answer DMs (Private Ask) about this project. Exactly one project may set dm: true in the pilot.
     dm: true
+    # Phase 3 digest: a weekly "what shipped" summary of new commits on the default branch,
+    # posted to channel_id above. anchor: branch (MyTV deploys manually off-GitHub).
+    digest:
+      cadence: weekly
+      tz: Europe/Stockholm
+      anchor: branch
