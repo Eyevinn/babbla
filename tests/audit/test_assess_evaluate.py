@@ -44,3 +44,18 @@ def test_report_carries_all_findings():
     r = evaluate(_facts())
     names = {f.name for f in r.findings}
     assert {"README", "CLAUDE.md", "docs/", "docs/adr/", "PR bodies", "commit messages", "issues"} <= names
+
+
+def test_readme_present_but_all_else_missing_is_partial():
+    # Spec: a present README keeps a repo out of THIN even when nothing else carries "why".
+    r = evaluate(_facts(
+        readme_bytes=1800,            # README OK
+        has_claude_md=False,
+        docs_file_count=0,            # docs/ missing
+        docs_adr_dir_exists=False, adr_count=0,   # docs/adr/ missing
+        pr_bodies=(),                 # PR bodies missing
+        commits=tuple(CommitMsg("wip", False) for _ in range(20)),  # commit messages missing
+        has_issues=False,             # issues missing
+    ))
+    assert r.verdict == "PARTIAL"
+    assert r.exit_code == 1

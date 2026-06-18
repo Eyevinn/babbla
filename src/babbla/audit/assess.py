@@ -152,6 +152,10 @@ class AuditReport:
 def _verdict(findings: tuple[SurfaceFinding, ...]) -> str:
     by_name = {f.name: f for f in findings}
     readme = by_name["README"].status
+    # README is intentionally included: "all why-surfaces missing" therefore implies
+    # README missing, so a repo with a present README is never THIN (PARTIAL at worst).
+    # Do NOT drop README here — that would flip a README-only repo to THIN, which the
+    # spec's PARTIAL definition ("README present but not enough why-surfaces") forbids.
     why_surfaces = ("README", "docs/", "docs/adr/", "PR bodies", "commit messages", "issues")
 
     # Thin: README missing, OR every why-surface is missing.
