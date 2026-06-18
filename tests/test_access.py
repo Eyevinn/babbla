@@ -1,0 +1,48 @@
+import pytest
+
+from babbla.access import AccessDecision, Surface, authorize_ask
+from babbla.config import ProjectBinding
+
+
+def _binding(visibility="public", channel_id="C123"):
+    return ProjectBinding("MyTV", "Wkkkkk", "MyTV", visibility, channel_id, True)
+
+
+@pytest.mark.parametrize("visibility", ["public", "internal", "private"])
+def test_channel_surface_always_allows(visibility):
+    d = authorize_ask(_binding(visibility), Surface.CHANNEL)
+    assert d.allowed is True
+    assert d.pointer is None
+
+
+@pytest.mark.parametrize("visibility", ["public", "internal"])
+def test_dm_allows_public_and_internal(visibility):
+    assert authorize_ask(_binding(visibility), Surface.DM).allowed is True
+
+
+def test_dm_denies_private_and_points_to_channel():
+    d = authorize_ask(_binding("private", "C123"), Surface.DM)
+    assert d.allowed is False
+    assert d.reason is not None
+    assert "<#C123>" in d.pointer
+    assert "MyTV" in d.pointer
+
+
+def test_dm_denies_private_without_channel_gracefully():
+    d = authorize_ask(_binding("private", None), Surface.DM)
+    assert d.allowed is False
+    assert "<#" not in d.pointer  # no broken channel link
+    assert "MyTV" in d.pointer
+
+
+def test_public_and_internal_decisions_are_identical():
+    # Single-workspace: every DM-er is a workspace member, so the tiers must
+    # not diverge. Guards the intentional-redundancy comment in access.py.
+    pub = authorize_ask(_binding("public"), Surface.DM)
+    intern = authorize_ask(_binding("internal"), Surface.DM)
+    assert pub == intern
+
+
+def test_surface_value_roundtrip():
+    assert Surface("dm") is Surface.DM
+    assert Surface.CHANNEL.value == "channel"
