@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Secrets & local state
+.env
+*.db
+*.sqlite3
+
+# Proposals (kept local, not tracked)
+PROPOSAL.md
+PROPOSAL-design.md
+PROPOSAL-pitch.md
