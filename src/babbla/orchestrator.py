@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
+from babbla.access import Surface, authorize_ask
 from babbla.agent_runner import CitedAnswer
 from babbla.config import Config, ProjectBinding
 
@@ -45,6 +46,11 @@ class Orchestrator:
         self, *, text: str, thread_ts: str, channel_id: str, is_dm: bool
     ) -> CitedAnswer:
         binding = self._resolve(channel_id, is_dm)
+        surface = Surface.DM if is_dm else Surface.CHANNEL
+        decision = authorize_ask(binding, surface)
+        if not decision.allowed:
+            # Pre-flight deny: no model call, no session write.
+            return CitedAnswer(text=decision.pointer, session_id=None)
         try:
             async with self._lock_for(thread_ts):
                 resume_session_id = await self._store.get_session(thread_ts)

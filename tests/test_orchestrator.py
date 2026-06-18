@@ -117,3 +117,34 @@ async def test_concurrent_asks_in_one_thread_share_one_lock(store):
     assert order == [1, 1]
     # ...and nothing is retained once the thread goes idle.
     assert len(orch._locks) == 0
+
+
+PRIVATE_BINDING = ProjectBinding("Secret", "Wkkkkk", "Secret", "private", "C777", True)
+PRIVATE_CONFIG = Config(bindings=(PRIVATE_BINDING,))
+
+
+async def test_dm_about_private_denies_without_runner_or_store(store):
+    runner = FakeRunner()
+    orch = Orchestrator(PRIVATE_CONFIG, runner, store)
+    ans = await orch.handle_ask(text="q", thread_ts="tp", channel_id="D999", is_dm=True)
+    assert "<#C777>" in ans.text          # points to the channel
+    assert ans.session_id is None
+    assert runner.calls == []             # runner never invoked
+    assert await store.get_session("tp") is None  # nothing written
+
+
+async def test_channel_about_private_calls_runner(store):
+    runner = FakeRunner()
+    orch = Orchestrator(PRIVATE_CONFIG, runner, store)
+    ans = await orch.handle_ask(text="q", thread_ts="tc", channel_id="C777", is_dm=False)
+    assert ans.text == "answer to q"      # channel = access; answered normally
+    assert runner.calls[0][1].name == "Secret"
+
+
+async def test_dm_about_public_still_calls_runner(store):
+    # MyTV regression guard: public DM behavior unchanged.
+    runner = FakeRunner()
+    orch = Orchestrator(CONFIG, runner, store)
+    ans = await orch.handle_ask(text="q", thread_ts="tx", channel_id="D999", is_dm=True)
+    assert ans.text == "answer to q"
+    assert runner.calls[0][1].name == "MyTV"

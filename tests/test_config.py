@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import logging
+
 import pytest
 
 from babbla.config import Config, ProjectBinding, load_config
@@ -57,3 +59,21 @@ def test_rejects_multiple_dm_projects(tmp_path):
 """
     with pytest.raises(ValueError, match="exactly one"):
         load_config(_write(tmp_path, text))
+
+
+def test_private_dm_logs_warning_but_loads(tmp_path, caplog):
+    cfg = tmp_path / "channels.yaml"
+    cfg.write_text(
+        "projects:\n"
+        "  - name: Secret\n"
+        "    owner: Wkkkkk\n"
+        "    repo: Secret\n"
+        "    visibility: private\n"
+        "    channel_id: C777\n"
+        "    dm: true\n",
+        encoding="utf-8",
+    )
+    with caplog.at_level(logging.WARNING, logger="babbla.config"):
+        config = load_config(cfg)
+    assert config.bindings[0].name == "Secret"     # load succeeded
+    assert any("private" in r.message and "dm" in r.message for r in caplog.records)
