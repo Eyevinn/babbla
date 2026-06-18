@@ -113,3 +113,24 @@ def surface_findings(facts: RepoFacts) -> tuple[SurfaceFinding, ...]:
         out.append(_finding("issues", THIN, "enabled, 0 issues"))
 
     return tuple(out)
+
+
+_FASTLY_RE = re.compile(r"fastly", re.IGNORECASE)
+_PAGES_RE = re.compile(r"pages", re.IGNORECASE)
+_DEPLOYISH_RE = re.compile(r"deploy|release|\bcd\b", re.IGNORECASE)
+
+
+def detect_deploy(facts: RepoFacts) -> tuple[str, str]:
+    """Return (deploy_style, detail). First match wins."""
+    if facts.environments:
+        return "Environments", "environments: " + ", ".join(facts.environments)
+    if facts.has_fastly_toml or any(_FASTLY_RE.search(w) for w in facts.workflow_names):
+        src = "fastly.toml" if facts.has_fastly_toml else next(w for w in facts.workflow_names if _FASTLY_RE.search(w))
+        return "Fastly", f"signal: {src}"
+    if facts.pages_enabled or any(_PAGES_RE.search(w) for w in facts.workflow_names):
+        src = "Pages enabled" if facts.pages_enabled else next(w for w in facts.workflow_names if _PAGES_RE.search(w))
+        return "Pages", f"signal: {src}"
+    deployish = [w for w in facts.workflow_names if _DEPLOYISH_RE.search(w)]
+    if deployish:
+        return "head_sha-fallback", f"workflow: {deployish[0]}"
+    return "none", "no CD workflow detected"
