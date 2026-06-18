@@ -79,7 +79,7 @@ async def main() -> None:
     register_handlers(app, orchestrator)
 
     scheduler = build_scheduler(config=config, secrets=secrets, db_path=db_path, client=app.client)
-    asyncio.create_task(scheduler.run())
+    scheduler_task = asyncio.create_task(scheduler.run())  # retained for the process lifetime
 
     handler = AsyncSocketModeHandler(app, os.environ["SLACK_APP_TOKEN"])
     logger.info("Babbla starting in Socket Mode (digest scheduler active)…")

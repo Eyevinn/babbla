@@ -24,6 +24,14 @@ async def test_run_once_ticks_all_projects():
     assert sched.ticked == [["MyTV", "Other"]]
 
 
+async def test_run_once_single_project():
+    cfg = Config(bindings=(_binding("MyTV", "C0AAA"), _binding("Other", "C0BBB")))
+    sched = RecordingScheduler(cfg)
+    rc = await run_once(sched, project="MyTV")
+    assert rc == 0
+    assert sched.ticked == [["MyTV"]]
+
+
 async def test_run_once_unknown_project_errors():
     cfg = Config(bindings=(_binding("MyTV", "C0AAA"),))
     sched = RecordingScheduler(cfg)
