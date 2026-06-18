@@ -134,3 +134,49 @@ def detect_deploy(facts: RepoFacts) -> tuple[str, str]:
     if deployish:
         return "head_sha-fallback", f"workflow: {deployish[0]}"
     return "none", "no CD workflow detected"
+
+
+@dataclass(frozen=True)
+class AuditReport:
+    owner: str
+    repo: str
+    visibility: str
+    default_branch: str
+    findings: tuple[SurfaceFinding, ...]
+    deploy_style: str
+    deploy_detail: str
+    verdict: str
+    exit_code: int
+
+
+def _verdict(findings: tuple[SurfaceFinding, ...]) -> str:
+    by_name = {f.name: f for f in findings}
+    readme = by_name["README"].status
+    why_surfaces = ("README", "docs/", "docs/adr/", "PR bodies", "commit messages", "issues")
+
+    # Thin: README missing, OR every why-surface is missing.
+    if readme == MISSING or all(by_name[n].status == MISSING for n in why_surfaces):
+        return "THIN"
+    # Good: README ok AND >=2 of {ADRs, PR bodies, commit messages} ok.
+    core = ("docs/adr/", "PR bodies", "commit messages")
+    if readme == OK and sum(1 for n in core if by_name[n].status == OK) >= 2:
+        return "GOOD"
+    # Everything else.
+    return "PARTIAL"
+
+
+def evaluate(facts: RepoFacts) -> AuditReport:
+    findings = surface_findings(facts)
+    style, detail = detect_deploy(facts)
+    verdict = _verdict(findings)
+    return AuditReport(
+        owner=facts.owner,
+        repo=facts.repo,
+        visibility=facts.visibility,
+        default_branch=facts.default_branch,
+        findings=findings,
+        deploy_style=style,
+        deploy_detail=detail,
+        verdict=verdict,
+        exit_code=0 if verdict == "GOOD" else 1,
+    )
