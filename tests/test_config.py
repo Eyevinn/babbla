@@ -62,8 +62,6 @@ def test_rejects_multiple_dm_projects(tmp_path):
 
 
 def test_private_dm_logs_warning_but_loads(tmp_path, caplog):
-    from babbla.config import load_config
-
     cfg = tmp_path / "channels.yaml"
     cfg.write_text(
         "projects:\n"

@@ -1,6 +1,6 @@
 import pytest
 
-from babbla.access import AccessDecision, Surface, authorize_ask
+from babbla.access import Surface, authorize_ask
 from babbla.config import ProjectBinding
 
 
