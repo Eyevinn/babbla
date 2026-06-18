@@ -77,3 +77,13 @@ def test_private_dm_logs_warning_but_loads(tmp_path, caplog):
         config = load_config(cfg)
     assert config.bindings[0].name == "Secret"     # load succeeded
     assert any("private" in r.message and "dm" in r.message for r in caplog.records)
+
+
+def test_lobby_channel_id_parsed(tmp_path):
+    cfg = load_config(_write(tmp_path, FIXTURE + "lobby_channel_id: C0LOBBY\n"))
+    assert cfg.lobby_channel_id == "C0LOBBY"
+
+
+def test_lobby_channel_id_absent_is_none(tmp_path):
+    cfg = load_config(_write(tmp_path, FIXTURE))
+    assert cfg.lobby_channel_id is None

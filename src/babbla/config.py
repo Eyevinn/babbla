@@ -35,6 +35,7 @@ class ProjectBinding:
 @dataclass(frozen=True)
 class Config:
     bindings: tuple[ProjectBinding, ...]
+    lobby_channel_id: str | None = None
 
     def for_channel(self, channel_id: str) -> ProjectBinding | None:
         for b in self.bindings:
@@ -102,4 +103,4 @@ def load_config(path: str | os.PathLike) -> Config:
             )
     if sum(1 for b in bindings if b.dm) > 1:
         raise ValueError("channels.yaml: exactly one project may set dm: true in the pilot")
-    return Config(bindings=bindings)
+    return Config(bindings=bindings, lobby_channel_id=raw.get("lobby_channel_id"))
