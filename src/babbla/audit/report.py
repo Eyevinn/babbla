@@ -25,6 +25,7 @@ def _marker(status: str, color: bool) -> str:
 
 
 def render_report(report: AuditReport, *, color: bool = True) -> str:
+    """Full human-readable audit readout, ending with the channels.yaml stub."""
     lines: list[str] = []
     lines.append(f"Babbla repo audit — {report.owner}/{report.repo}")
     lines.append(f"Visibility: {report.visibility} · default branch: {report.default_branch}")

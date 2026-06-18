@@ -41,4 +41,6 @@ def test_no_color_uses_ascii_markers():
 
 def test_color_uses_symbols():
     text = render_report(_report(), color=True)
-    assert "✓" in text
+    assert "✓" in text   # ok
+    assert "⚠" in text   # thin
+    assert "✗" in text   # missing
