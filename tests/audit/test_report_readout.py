@@ -44,3 +44,8 @@ def test_color_uses_symbols():
     assert "✓" in text   # ok
     assert "⚠" in text   # thin
     assert "✗" in text   # missing
+
+
+def test_verdict_line_includes_tagline():
+    text = render_report(_report(), color=False)
+    assert 'Verdict: GOOD — Babbla should answer "why" well.' in text

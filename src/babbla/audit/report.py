@@ -18,6 +18,11 @@ def render_binding(report: AuditReport) -> str:
 _SYMBOLS = {OK: "✓", THIN: "⚠", MISSING: "✗"}
 _ASCII = {OK: "OK", THIN: "THIN", MISSING: "MISSING"}
 _RULE = "─" * 64
+_VERDICT_TAGLINE = {
+    "GOOD": 'Babbla should answer "why" well.',
+    "PARTIAL": "usable; answers will be shallower.",
+    "THIN": 'expect frequent "I don\'t know".',
+}
 
 
 def _marker(status: str, color: bool) -> str:
@@ -36,7 +41,8 @@ def render_report(report: AuditReport, *, color: bool = True) -> str:
     lines.append("")
     lines.append(f"Deploy style: {report.deploy_style}  ({report.deploy_detail})")
     lines.append("")
-    lines.append(f"Verdict: {report.verdict}")
+    tagline = _VERDICT_TAGLINE.get(report.verdict, "")
+    lines.append(f"Verdict: {report.verdict}" + (f" — {tagline}" if tagline else ""))
 
     recs = [f.recommendation for f in report.findings if f.recommendation]
     if recs:

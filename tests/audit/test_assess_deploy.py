@@ -37,3 +37,7 @@ def test_head_sha_fallback_for_generic_deploy_workflow():
 
 def test_none_when_no_cd():
     assert detect_deploy(_facts(workflow_names=("test.yml", "lint.yml")))[0] == "none"
+
+
+def test_fastly_wins_over_pages():
+    assert detect_deploy(_facts(has_fastly_toml=True, pages_enabled=True))[0] == "Fastly"

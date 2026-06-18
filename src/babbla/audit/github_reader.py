@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 
 
@@ -38,10 +41,6 @@ class RepoFacts:
 class RepoUnreachable(Exception):
     """Raised when the repository itself cannot be read (404/401/403/network)."""
 
-
-import json
-import urllib.error
-import urllib.request
 
 GITHUB_API = "https://api.github.com"
 
@@ -88,6 +87,8 @@ class GithubReader:
         pulls_raw = self._get(f"{base}/pulls?state=closed&per_page=20") or []
         pr_bodies = [PrBody(length=len(p.get("body") or "")) for p in pulls_raw if p.get("merged_at")]
 
+        # Use the search API (not /issues) for a true issue total: /issues conflates
+        # PRs with issues and is paginated. Note: search has a lower rate limit.
         issues = self._get(f"/search/issues?q=repo:{owner}/{repo}+type:issue") or {}
         issue_count = int(issues.get("total_count", 0))
 
