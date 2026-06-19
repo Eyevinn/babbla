@@ -67,6 +67,26 @@ class Orchestrator:
         if cmd.verb == "digest":
             await self._personal_store.set_cadence(user_id, cmd.arg)
             return personal.render_digest_set(cmd.arg)
+        if cmd.verb == "topic-list":
+            topics = await self._personal_store.topics_for(user_id)
+            return personal.render_topic_list(topics)
+        if cmd.verb in ("topic-add", "topic-remove"):
+            binding = next((b for b in self._config.bindings if b.name == cmd.project), None)
+            if binding is None:
+                return personal.render_unknown_project(
+                    [b.name for b in self._config.bindings if is_open_tier(b)]
+                )
+            if not is_open_tier(binding):
+                return personal.render_private_refused(binding.name)
+            if cmd.verb == "topic-remove":
+                await self._personal_store.remove_topic(user_id, binding.name, cmd.name)
+                return personal.render_topic_removed(binding.name, cmd.name)
+            followed = await self._personal_store.list_for(user_id)
+            if binding.name not in followed:
+                return personal.render_topic_needs_follow(binding.name)
+            description = cmd.description or cmd.name
+            await self._personal_store.add_topic(user_id, binding.name, cmd.name, description)
+            return personal.render_topic_added(binding.name, cmd.name, description)
         if cmd.verb == "subscribe":
             binding = next((b for b in self._config.bindings if b.name == cmd.arg), None)
             if binding is None:

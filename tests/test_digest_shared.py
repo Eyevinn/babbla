@@ -136,9 +136,65 @@ async def test_unknown_name_skipped_with_warning(monkeypatch, caplog):
 
 class EmptySharedRunner:
     def __init__(self): self.calls = []
-    async def summarize_shared(self, context_binding, per_project_changes, topic=None, slugs=None):
+    async def summarize_shared(self, context_binding, per_project_changes, topic=None, slugs=None, topics_by_project=None):
         self.calls.append(topic.name if topic else None)
         return ""
+
+
+from babbla.digest.runner import DigestRunner
+
+
+class _RecordingAgent:
+    def __init__(self, reply="ok"):
+        self.reply = reply
+        self.prompt = None
+    async def run_ask(self, prompt, binding, _none, system_prompt=None):
+        self.prompt = prompt
+        class _A: text = self.reply
+        return _A()
+
+
+def _binding():
+    from babbla.config import ProjectBinding
+    return ProjectBinding("MyTV", "o", "MyTV", "public", "C1", False)
+
+
+async def test_summarize_shared_no_topics_prompt_has_no_filter_instruction():
+    agent = _RecordingAgent()
+    changes = {"MyTV": [Change(sha="a" * 40, subject="x", pr_number=None)]}
+    await DigestRunner(agent).summarize_shared(_binding(), changes)
+    assert "Include ONLY changes relevant" not in agent.prompt
+
+
+async def test_summarize_shared_per_project_topic_adds_union_instruction():
+    agent = _RecordingAgent()
+    changes = {"MyTV": [Change(sha="a" * 40, subject="x", pr_number=None)]}
+    topics = {"MyTV": (("security", "auth, CVEs"), ("perf", "latency"))}
+    await DigestRunner(agent).summarize_shared(_binding(), changes, topics_by_project=topics)
+    assert "Include ONLY changes relevant to ANY of these topics" in agent.prompt
+    assert "security (auth, CVEs)" in agent.prompt and "perf (latency)" in agent.prompt
+
+
+async def test_summarize_shared_nothing_relevant_returns_empty():
+    agent = _RecordingAgent(reply="NOTHING_RELEVANT")
+    changes = {"MyTV": [Change(sha="a" * 40, subject="x", pr_number=None)]}
+    out = await DigestRunner(agent).summarize_shared(
+        _binding(), changes, topics_by_project={"MyTV": (("security", "x"),)})
+    assert out == ""
+
+
+async def test_summarize_shared_mixed_only_scoped_project_gets_instruction():
+    from babbla.config import ProjectBinding
+    agent = _RecordingAgent()
+    changes = {
+        "MyTV": [Change(sha="a" * 40, subject="x", pr_number=None)],
+        "Babbla": [Change(sha="b" * 40, subject="y", pr_number=None)],
+    }
+    topics = {"MyTV": (("security", "auth, CVEs"),)}     # only MyTV scoped
+    await DigestRunner(agent).summarize_shared(_binding(), changes, topics_by_project=topics)
+    # The scoped project's section carries the instruction; the unscoped one does not.
+    assert "## MyTV" in agent.prompt and "Include ONLY changes relevant to ANY" in agent.prompt
+    assert agent.prompt.count("Include ONLY changes relevant to ANY") == 1   # only one section scoped
 
 
 async def test_topic_empty_advances_but_does_not_post(monkeypatch):

@@ -50,14 +50,31 @@ class DigestRunner:
     async def summarize_shared(
         self, context_binding: ProjectBinding, per_project_changes: dict[str, list[Change]],
         topic: Topic | None = None, slugs: dict[str, str] | None = None,
+        topics_by_project: dict | None = None,
     ) -> str:
         slugs = slugs or {}
-        sections = "\n\n".join(
-            f"## {name} ({slugs[name]})\n{_facts(changes)}" if name in slugs
-            else f"## {name}\n{_facts(changes)}"
-            for name, changes in per_project_changes.items()
-        )
+        topics_by_project = topics_by_project or {}
+        has_topics = any(tlist for tlist in topics_by_project.values())
+        section_parts = []
+        for name, changes in per_project_changes.items():
+            heading = f"## {name} ({slugs[name]})" if name in slugs else f"## {name}"
+            tlist = topics_by_project.get(name)
+            if tlist:
+                topic_line = "; ".join(f"{tn} ({td})" for tn, td in tlist)
+                instr = (
+                    f"\n[Include ONLY changes relevant to ANY of these topics: {topic_line}. "
+                    "If none of this project's changes are relevant, omit this section entirely.]"
+                )
+            else:
+                instr = ""
+            section_parts.append(f"{heading}{instr}\n{_facts(changes)}")
+        sections = "\n\n".join(section_parts)
         preamble = _topic_preamble(topic) if topic else ""
+        if has_topics:
+            preamble += (
+                "Some sections below are scoped to per-project topics. If, after applying those "
+                f"filters, NO section has any relevant content, reply with exactly {NOTHING_RELEVANT}.\n\n"
+            )
         prompt = preamble + (
             "Write ONE concise Slack digest of what shipped across several projects this period. "
             "Lead with a short cross-project headline, then a section per project. Summarize at a "
@@ -69,6 +86,6 @@ class DigestRunner:
         answer = await self._agent.run_ask(
             prompt, context_binding, None, system_prompt=DIGEST_SYSTEM_PROMPT
         )
-        if topic and answer.text.strip() == NOTHING_RELEVANT:
+        if (topic or has_topics) and answer.text.strip() == NOTHING_RELEVANT:
             return ""
         return answer.text

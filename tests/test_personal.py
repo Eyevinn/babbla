@@ -1,5 +1,14 @@
+import asyncio
+
 from babbla import personal
-from babbla.personal import Command
+from babbla.personal import (
+    Command,
+    render_topic_added,
+    render_topic_removed,
+    render_topic_list,
+    render_topic_needs_follow,
+    classify_intent,
+)
 
 
 def test_parse_empty_is_list():
@@ -121,3 +130,66 @@ async def test_classify_intent_ignores_reasoning_before_command_line():
 async def test_classify_intent_none_after_reasoning_is_not_a_command():
     reply = "This reads like a question about the repo, not a subscription change.\nNONE"
     assert await personal.classify_intent("how does X work?", [], _intent(reply)) is None
+
+
+def test_parse_topic_add():
+    cmd = personal.parse_command("topic add MyTV | security | auth, secrets, CVEs")
+    assert cmd.verb == "topic-add"
+    assert cmd.project == "MyTV"
+    assert cmd.name == "security"
+    assert cmd.description == "auth, secrets, CVEs"
+
+
+def test_parse_topic_add_multiword_project_and_desc():
+    cmd = personal.parse_command("topic add Agentic Kit | rag | retrieval, embeddings | extra")
+    assert cmd.verb == "topic-add"
+    assert cmd.project == "Agentic Kit"
+    assert cmd.name == "rag"
+    assert cmd.description == "retrieval, embeddings"   # only first 3 pipe fields used
+
+
+def test_parse_topic_remove():
+    cmd = personal.parse_command("topic remove MyTV | security")
+    assert cmd.verb == "topic-remove"
+    assert cmd.project == "MyTV"
+    assert cmd.name == "security"
+
+
+def test_parse_topic_list():
+    assert personal.parse_command("topic list").verb == "topic-list"
+
+
+def test_parse_topic_malformed_is_help():
+    assert personal.parse_command("topic add MyTV | security").verb == "help"   # missing description
+    assert personal.parse_command("topic remove MyTV").verb == "help"           # missing name
+    assert personal.parse_command("topic wat").verb == "help"
+    assert personal.parse_command("topic list extra").verb == "help"   # list takes no args
+    assert personal.parse_command("topic").verb == "help"              # no subcommand
+
+
+def test_render_topic_added_shows_name_and_description():
+    out = render_topic_added("MyTV", "security", "auth, secrets, CVEs")
+    assert "security" in out and "MyTV" in out and "auth, secrets, CVEs" in out
+
+
+def test_render_topic_removed_shows_project_and_name():
+    out = render_topic_removed("MyTV", "security")
+    assert "MyTV" in out and "security" in out
+
+
+def test_render_topic_list_empty_and_grouped():
+    assert "no digest topics" in render_topic_list({}).lower()
+    grouped = render_topic_list({"MyTV": (("security", "x"), ("playback", "y"))})
+    assert "MyTV" in grouped and "security" in grouped and "playback" in grouped
+
+
+def test_render_topic_needs_follow():
+    out = render_topic_needs_follow("MyTV")
+    assert "MyTV" in out and "follow" in out.lower()
+
+
+async def test_classify_intent_maps_topic_add():
+    async def fake_intent_fn(text, names):
+        return "topic add MyTV | security | auth, secrets, CVEs"
+    cmd = await classify_intent("only show me security in MyTV", ["MyTV"], fake_intent_fn)
+    assert cmd.verb == "topic-add" and cmd.name == "security"

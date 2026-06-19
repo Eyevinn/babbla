@@ -173,9 +173,18 @@ class PersonalDigestAction:
             n: f"{self._by_name[n].owner}/{self._by_name[n].repo}"
             for n in per_project_changes if n in self._by_name
         }
-        text = await self._runner.summarize_shared(context_binding, per_project_changes, slugs=slugs)
-        dm_channel = await self._poster.open_dm(user_id)
-        await self._poster.post(dm_channel, text, blocks=delete_button_blocks(text, owner_id=user_id))
+        all_topics = await self._subs.topics_for(user_id)
+        topics_by_project = {
+            n: all_topics[n] for n in per_project_changes if n in all_topics
+        }
+        text = await self._runner.summarize_shared(
+            context_binding, per_project_changes, slugs=slugs, topics_by_project=topics_by_project
+        )
+        if text.strip():
+            dm_channel = await self._poster.open_dm(user_id)
+            await self._poster.post(
+                dm_channel, text, blocks=delete_button_blocks(text, owner_id=user_id)
+            )
         await self._state.advance(user_id, heads, now.timestamp())
 
 
