@@ -1,4 +1,4 @@
-from babbla.session_store import SessionStore, LobbyThreadStore
+from babbla.session_store import SessionStore, LobbyThreadStore, PersonalSubStore
 
 
 async def test_put_then_get_roundtrip(tmp_path):
@@ -72,3 +72,40 @@ async def test_lobby_store_ttl_eviction(tmp_path):
     clock["now"] = 1101.0
     assert await store.get("t1") is None
     store.close()
+
+
+async def test_personal_sub_add_list_idempotent(tmp_path):
+    s = PersonalSubStore(str(tmp_path / "s.db"))
+    await s.add("U1", "MyTV")
+    await s.add("U1", "MyTV")          # idempotent
+    await s.add("U1", "Stream")
+    assert await s.list_for("U1") == ("MyTV", "Stream")   # insertion order
+    assert await s.list_for("U2") == ()
+    s.close()
+
+
+async def test_personal_sub_remove_idempotent(tmp_path):
+    s = PersonalSubStore(str(tmp_path / "s.db"))
+    await s.add("U1", "MyTV")
+    await s.remove("U1", "MyTV")
+    await s.remove("U1", "MyTV")       # no error on missing
+    assert await s.list_for("U1") == ()
+    s.close()
+
+
+async def test_personal_sub_all_user_ids(tmp_path):
+    s = PersonalSubStore(str(tmp_path / "s.db"))
+    await s.add("U1", "MyTV")
+    await s.add("U2", "Stream")
+    assert sorted(await s.all_user_ids()) == ["U1", "U2"]
+    s.close()
+
+
+async def test_personal_cadence_default_none_then_roundtrip(tmp_path):
+    s = PersonalSubStore(str(tmp_path / "s.db"))
+    assert await s.get_cadence("U1") is None
+    await s.set_cadence("U1", "daily")
+    assert await s.get_cadence("U1") == "daily"
+    await s.set_cadence("U1", "off")
+    assert await s.get_cadence("U1") == "off"
+    s.close()
