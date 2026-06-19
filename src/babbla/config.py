@@ -14,11 +14,18 @@ _ANCHORS = {"branch", "deploy"}
 
 
 @dataclass(frozen=True)
+class Topic:
+    name: str
+    description: str
+
+
+@dataclass(frozen=True)
 class DigestConfig:
     cadence: str
     tz: str
     anchor: str
     deploy_workflow: str | None = None
+    topic: "Topic | None" = None
 
 
 @dataclass(frozen=True)
@@ -44,6 +51,7 @@ class ProjectBinding:
 class SubscriptionDigest:
     cadence: str
     tz: str
+    topic: "Topic | None" = None
 
 
 @dataclass(frozen=True)
@@ -144,12 +152,27 @@ def _parse_subscriptions(raw_subs, known_names: set[str]) -> tuple[Subscription,
                 f"channels.yaml: channel_id {channel_id} appears in more than one subscription"
             )
         seen_channels.add(channel_id)
-        ct = _parse_cadence_tz(f"subscription {channel_id}", raw_sub.get("digest"), "digest")
-        digest = SubscriptionDigest(cadence=ct[0], tz=ct[1]) if ct else None
+        raw_digest = raw_sub.get("digest")
+        ct = _parse_cadence_tz(f"subscription {channel_id}", raw_digest, "digest")
+        if ct:
+            topic = _parse_topic(f"subscription {channel_id}", (raw_digest or {}).get("topic"))
+            digest = SubscriptionDigest(cadence=ct[0], tz=ct[1], topic=topic)
+        else:
+            digest = None
         subscriptions.append(
             Subscription(channel_id=channel_id, project_names=names, digest=digest)
         )
     return tuple(subscriptions)
+
+
+def _parse_topic(label: str, raw: dict | None) -> "Topic | None":
+    if not raw:
+        return None
+    name = str(raw.get("name", "")).strip()
+    description = str(raw.get("description", "")).strip()
+    if not name or not description:
+        raise ValueError(f"{label}: topic requires both name and description")
+    return Topic(name=name, description=description)
 
 
 def _parse_digest(name: str, raw: dict | None) -> DigestConfig | None:
@@ -175,7 +198,8 @@ def _parse_digest(name: str, raw: dict | None) -> DigestConfig | None:
         deploy_workflow = (raw.get("deploy") or {}).get("workflow")
         if not deploy_workflow:
             raise ValueError(f"{name}: digest.anchor=deploy requires digest.deploy.workflow")
-    return DigestConfig(cadence=cadence, tz=tz, anchor=anchor, deploy_workflow=deploy_workflow)
+    topic = _parse_topic(name, raw.get("topic"))
+    return DigestConfig(cadence=cadence, tz=tz, anchor=anchor, deploy_workflow=deploy_workflow, topic=topic)
 
 
 def _parse_personal_digest(raw: dict | None) -> "PersonalDigestConfig | None":

@@ -274,3 +274,17 @@ def test_personal_digest_invalid_tz_raises(tmp_path):
     body = _PROJECT + "personal_digest:\n  default_cadence: weekly\n  tz: Mars/Phobos\n"
     with pytest.raises(ValueError, match="time zone"):
         load_config(_write(tmp_path, body))
+
+
+def test_subscription_digest_topic_parses(tmp_path):
+    from babbla.config import load_config, Topic
+    p = tmp_path / "channels.yaml"
+    p.write_text(
+        "projects:\n  - name: MyTV\n    owner: o\n    repo: MyTV\n    visibility: public\n"
+        "    channel_id: C1\n    dm: false\n"
+        "subscriptions:\n  - channel_id: C900\n    projects: [MyTV]\n"
+        "    digest:\n      cadence: weekly\n      tz: UTC\n"
+        "      topic:\n        name: incidents\n        description: outages, rollbacks\n"
+    )
+    cfg = load_config(p)
+    assert cfg.subscriptions[0].digest.topic == Topic(name="incidents", description="outages, rollbacks")
