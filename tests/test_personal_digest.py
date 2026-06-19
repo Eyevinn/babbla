@@ -12,8 +12,13 @@ BY_NAME = {"MyTV": MYTV, "Secret": SECRET}
 
 
 class FakeRunner:
-    async def summarize_shared(self, binding, per_project_changes, slugs=None):
-        return "digest text"
+    def __init__(self, text="digest text"):
+        self.text = text
+        self.last_topics = None
+
+    async def summarize_shared(self, binding, per_project_changes, slugs=None, topics_by_project=None):
+        self.last_topics = topics_by_project
+        return self.text
 
 
 class FakePoster:
@@ -126,3 +131,31 @@ async def test_one_user_failure_does_not_abort_others(tmp_path):
     assert sorted(poster.opened) == ["U1", "U2"]   # both attempted
     subs.close()
     state.close()
+
+
+async def test_personal_digest_passes_user_topics_to_runner(tmp_path):
+    subs, state = await _store_pair(tmp_path)
+    await subs.add("U1", "MyTV")
+    await subs.add_topic("U1", "MyTV", "security", "auth, CVEs")
+    runner = FakeRunner()
+    poster = FakePoster()
+    action = PersonalDigestAction(subs, state, BY_NAME,
+                                  _get_json_with_commits("sha1", [{"sha": "sha1"}]),
+                                  runner, poster, "weekly", "UTC")
+    await action.maybe_run(NOW)
+    assert runner.last_topics == {"MyTV": (("security", "auth, CVEs"),)}
+    subs.close(); state.close()
+
+
+async def test_personal_digest_empty_summary_skips_post_but_advances(tmp_path):
+    subs, state = await _store_pair(tmp_path)
+    await subs.add("U1", "MyTV")
+    await subs.add_topic("U1", "MyTV", "i18n", "translations")   # nothing matches → runner returns ""
+    poster = FakePoster()
+    action = PersonalDigestAction(subs, state, BY_NAME,
+                                  _get_json_with_commits("sha1", [{"sha": "sha1"}]),
+                                  FakeRunner(text=""), poster, "weekly", "UTC")
+    await action.maybe_run(NOW)
+    assert poster.posts == []                                    # no blank DM
+    assert (await state.get("U1")).watermarks.get("MyTV") == "sha1"   # watermark advanced
+    subs.close(); state.close()
