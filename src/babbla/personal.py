@@ -111,16 +111,22 @@ def make_intent_fn(query_fn, model: str):
             "        -> topic add MyTV | security | auth, secrets, access control, CVEs, dependency security bumps\n"
             "  'stop filtering MyTV to security' / 'remove the security topic from MyTV'\n"
             "        -> topic remove MyTV | security\n"
-            "  'what topics do I have' / 'my filters'                     -> topic list\n"
+            "  'what topics do I have' / 'my filters' / 'list my topics' /\n"
+            "  'what am I filtering on' / 'show my topics' / 'which topics am I following'\n"
+            "        -> topic list\n"
             "  'how does the digest work?' / 'what's in MyTV?' / 'hi'     -> NONE\n\n"
             "For `topic add`, ALWAYS supply a useful <description>: expand the user's short "
             "topic name into a comma-separated phrase of the concepts it should match, so the "
             "digest can filter on it. Use the user's own description verbatim if they gave one. "
-            "Copy a project name EXACTLY as written in the list. A 'what/show/list my "
-            "subscriptions' question is `list`; 'what topics do I have' is `topic list`. If the "
-            "message is about digest FREQUENCY (daily/weekly/off), it is a `digest` command. "
-            "Anything that is a question ABOUT a project's code/history, a greeting, or unclear "
-            "is NONE. When genuinely unsure, output NONE.\n\nProjects:\n" + listing
+            "Copy a project name EXACTLY as written in the list. "
+            "IMPORTANT: any request to SEE or LIST the user's OWN subscriptions, topics, or "
+            "filters is ALWAYS a management command (`list` or `topic list`) — NEVER NONE, even "
+            "though it is phrased as a question. 'my/your topics' or 'my/your filters' means the "
+            "user's personal digest filters, NOT a project's code feature — so 'what topics do I "
+            "have' is `topic list`, never a project question. "
+            "If the message is about digest FREQUENCY (daily/weekly/off), it is a `digest` "
+            "command. A question ABOUT a project's code/history/design, a greeting, or an unclear "
+            "message is NONE. When genuinely unsure, output NONE.\n\nProjects:\n" + listing
         )
         options = ClaudeAgentOptions(
             model=model, system_prompt=system_prompt, allowed_tools=[]
