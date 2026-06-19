@@ -28,3 +28,19 @@ class DigestRunner:
         )
         answer = await self._agent.run_ask(prompt, binding, None)
         return answer.text
+
+    async def summarize_shared(
+        self, context_binding: ProjectBinding, per_project_changes: dict[str, list[Change]]
+    ) -> str:
+        sections = "\n\n".join(
+            f"## {name}\n{_facts(changes)}" for name, changes in per_project_changes.items()
+        )
+        prompt = (
+            "Write ONE concise Slack digest of what shipped across several projects this period. "
+            "Lead with a short cross-project headline, then a section per project. Summarize at a "
+            "reader-friendly altitude, group related work, and CITE commits by SHA and PRs by number "
+            "as GitHub links. Keep it short and Slack-friendly.\n\n"
+            f"{sections}"
+        )
+        answer = await self._agent.run_ask(prompt, context_binding, None)
+        return answer.text

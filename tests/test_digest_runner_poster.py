@@ -34,11 +34,36 @@ async def test_runner_builds_prompt_with_facts_and_returns_text():
 
 
 class FakeClient:
-    def __init__(self): self.kwargs = None
-    async def chat_postMessage(self, **kwargs): self.kwargs = kwargs; return {"ok": True}
+    def __init__(self): self.calls = []
+    async def chat_postMessage(self, **kwargs):
+        self.calls.append(kwargs)
+        return {"ok": True, "ts": "111.222"}
 
 
-async def test_poster_posts_top_level_message():
+async def test_poster_posts_top_level_and_returns_ts():
     client = FakeClient()
-    await SlackPoster(client).post("C0XXXXXXXXX", "hello")
-    assert client.kwargs == {"channel": "C0XXXXXXXXX", "text": "hello"}
+    ts = await SlackPoster(client).post("C0XXXXXXXXX", "hello")
+    assert ts == "111.222"
+    assert client.calls == [{"channel": "C0XXXXXXXXX", "text": "hello"}]
+
+
+async def test_poster_posts_threaded_reply():
+    client = FakeClient()
+    await SlackPoster(client).post("C0XXXXXXXXX", "answer", thread_ts="111.222")
+    assert client.calls == [{"channel": "C0XXXXXXXXX", "text": "answer", "thread_ts": "111.222"}]
+
+
+async def test_summarize_shared_groups_by_project():
+    agent = FakeAgent()
+    out = await DigestRunner(agent).summarize_shared(
+        _binding(),
+        {
+            "MyTV": [Change("abc1234", "feat: playback (#7)", 7)],
+            "Stream": [Change("def5678", "fix: retry", None)],
+        },
+    )
+    assert out == "SUMMARY"
+    p = agent.prompt
+    assert "MyTV" in p and "Stream" in p
+    assert "abc1234" in p and "feat: playback (#7)" in p
+    assert "def5678" in p and "fix: retry" in p

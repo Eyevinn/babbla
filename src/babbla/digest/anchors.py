@@ -45,19 +45,22 @@ def _change(commit: dict) -> Change:
     return Change(sha=commit.get("sha", ""), subject=subject, pr_number=int(m.group(1)) if m else None)
 
 
-def current_head(binding: ProjectBinding, *, get_json) -> str | None:
-    o, r = binding.owner, binding.repo
-    d = binding.digest
-    if d.anchor == "branch":
-        commits = get_json(f"/repos/{o}/{r}/commits?per_page=1")
+def head_for(owner: str, repo: str, anchor: str, deploy_workflow: str | None, *, get_json) -> str | None:
+    if anchor == "branch":
+        commits = get_json(f"/repos/{owner}/{repo}/commits?per_page=1")
         if commits:
             return commits[0]["sha"]
         return None
     # deploy: latest successful run of the configured workflow
-    wf = urllib.parse.quote(d.deploy_workflow, safe="")
-    runs = get_json(f"/repos/{o}/{r}/actions/workflows/{wf}/runs?status=success&per_page=1")
+    wf = urllib.parse.quote(deploy_workflow, safe="")
+    runs = get_json(f"/repos/{owner}/{repo}/actions/workflows/{wf}/runs?status=success&per_page=1")
     items = (runs or {}).get("workflow_runs", [])
     return items[0]["head_sha"] if items else None
+
+
+def current_head(binding: ProjectBinding, *, get_json) -> str | None:
+    d = binding.digest
+    return head_for(binding.owner, binding.repo, d.anchor, d.deploy_workflow, get_json=get_json)
 
 
 def changes_between(owner: str, repo: str, base_sha: str, head_sha: str, *, get_json) -> list[Change]:

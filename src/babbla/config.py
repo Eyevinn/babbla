@@ -22,6 +22,13 @@ class DigestConfig:
 
 
 @dataclass(frozen=True)
+class QuizConfig:
+    cadence: str
+    tz: str
+    count: int = 3
+
+
+@dataclass(frozen=True)
 class ProjectBinding:
     name: str
     owner: str
@@ -30,12 +37,20 @@ class ProjectBinding:
     channel_id: str | None
     dm: bool
     digest: DigestConfig | None = None
+    quiz: QuizConfig | None = None
+
+
+@dataclass(frozen=True)
+class SubscriptionDigest:
+    cadence: str
+    tz: str
 
 
 @dataclass(frozen=True)
 class Subscription:
     channel_id: str
     project_names: tuple[str, ...]
+    digest: SubscriptionDigest | None = None
 
 
 @dataclass(frozen=True)
@@ -65,6 +80,40 @@ class Config:
     def digest_bindings(self) -> tuple[ProjectBinding, ...]:
         return tuple(b for b in self.bindings if b.digest is not None and b.channel_id)
 
+    def digest_subscriptions(self) -> tuple[Subscription, ...]:
+        return tuple(s for s in self.subscriptions if s.digest is not None)
+
+    def quiz_bindings(self) -> tuple[ProjectBinding, ...]:
+        return tuple(b for b in self.bindings if b.quiz is not None and b.channel_id)
+
+
+def _parse_cadence_tz(label: str, raw: dict | None, kind: str):
+    """Shared cadence+tz parse for subscription digest / quiz. Returns (cadence, tz) or None."""
+    if not raw:
+        return None
+    raw_cadence = raw.get("cadence", "off")
+    if raw_cadence is False or str(raw_cadence).strip().lower() == "off":
+        return None
+    cadence = str(raw_cadence)
+    if cadence not in _CADENCES:
+        raise ValueError(f"{label}: {kind}.cadence must be one of off|daily|weekly, got {cadence!r}")
+    tz = str(raw.get("tz", "UTC"))
+    try:
+        ZoneInfo(tz)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise ValueError(f"{label}: {kind}.tz is not a valid time zone: {tz!r}") from exc
+    return cadence, tz
+
+
+def _parse_quiz(name: str, raw: dict | None) -> QuizConfig | None:
+    ct = _parse_cadence_tz(name, raw, "quiz")
+    if ct is None:
+        return None
+    count = raw.get("count", 3)
+    if not isinstance(count, int) or isinstance(count, bool) or count < 1:
+        raise ValueError(f"{name}: quiz.count must be a positive integer, got {count!r}")
+    return QuizConfig(cadence=ct[0], tz=ct[1], count=count)
+
 
 def _parse_subscriptions(raw_subs, known_names: set[str]) -> tuple[Subscription, ...]:
     subscriptions: list[Subscription] = []
@@ -88,7 +137,11 @@ def _parse_subscriptions(raw_subs, known_names: set[str]) -> tuple[Subscription,
                 f"channels.yaml: channel_id {channel_id} appears in more than one subscription"
             )
         seen_channels.add(channel_id)
-        subscriptions.append(Subscription(channel_id=channel_id, project_names=names))
+        ct = _parse_cadence_tz(f"subscription {channel_id}", raw_sub.get("digest"), "digest")
+        digest = SubscriptionDigest(cadence=ct[0], tz=ct[1]) if ct else None
+        subscriptions.append(
+            Subscription(channel_id=channel_id, project_names=names, digest=digest)
+        )
     return tuple(subscriptions)
 
 
@@ -130,6 +183,7 @@ def load_config(path: str | os.PathLike) -> Config:
             channel_id=p.get("channel_id"),
             dm=bool(p.get("dm", False)),
             digest=_parse_digest(p["name"], p.get("digest")),
+            quiz=_parse_quiz(p["name"], p.get("quiz")),
         )
         for p in raw.get("projects", [])
     )
