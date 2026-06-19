@@ -341,6 +341,15 @@ async def test_subscription_stale_sticky_reroutes(store, tmp_path):
     lobby_store.close()
 
 
+class _FakeLobbyStore:
+    def __init__(self):
+        self._d = {}
+    async def get(self, thread_ts):
+        return self._d.get(thread_ts)
+    async def put(self, thread_ts, project):
+        self._d[thread_ts] = project
+
+
 from babbla.session_store import PersonalSubStore
 
 
@@ -398,3 +407,45 @@ async def test_handle_command_list_shows_default_cadence(store, psub):
     await psub.add("U1", "MyTV")
     reply = await orch.handle_command("U1", "list")
     assert "MyTV" in reply and "weekly" in reply
+
+
+def _catalog_two():
+    pub = ProjectBinding("MyTV", "o", "MyTV", "public", "C1", True)
+    other = ProjectBinding("Stream", "o", "stream", "internal", "C2", False)
+    return (CatalogEntry(pub, None), CatalogEntry(other, None))
+
+
+async def test_dm_empty_subs_falls_back_to_dm_true(store, psub):
+    # CONFIG has the single dm:true MyTV binding (module-level in this file)
+    orch = Orchestrator(CONFIG, FakeRunner(), store, personal_store=psub, catalog=_catalog_two())
+    runner = orch._runner
+    ans = await orch.handle_ask(text="q", thread_ts="t1", channel_id="D1", is_dm=True, user_id="U1")
+    assert runner.calls[0][1].name == "MyTV"   # fell back to dm:true project
+    assert ans.text == "answer to q"
+
+
+async def test_dm_size1_answers_directly_no_classifier(store, psub):
+    classifier_calls = []
+    async def classify_fn(text, catalog):
+        classifier_calls.append(text)
+        return "Stream"
+    orch = Orchestrator(CONFIG, FakeRunner(), store, personal_store=psub,
+                        catalog=_catalog_two(), classify_fn=classify_fn,
+                        lobby_store=_FakeLobbyStore())
+    await psub.add("U1", "Stream")
+    ans = await orch.handle_ask(text="q", thread_ts="t1", channel_id="D1", is_dm=True, user_id="U1")
+    assert orch._runner.calls[0][1].name == "Stream"
+    assert classifier_calls == []              # size-1 shortcut: no routing call
+    assert ans.text.endswith("answer to q")    # no pointer suffix
+
+
+async def test_dm_two_subs_routes_via_classifier(store, psub):
+    async def classify_fn(text, catalog):
+        return "Stream"
+    orch = Orchestrator(CONFIG, FakeRunner(), store, personal_store=psub,
+                        catalog=_catalog_two(), classify_fn=classify_fn,
+                        lobby_store=_FakeLobbyStore())
+    await psub.add("U1", "MyTV")
+    await psub.add("U1", "Stream")
+    await orch.handle_ask(text="why HLS", thread_ts="t1", channel_id="D1", is_dm=True, user_id="U1")
+    assert orch._runner.calls[0][1].name == "Stream"
