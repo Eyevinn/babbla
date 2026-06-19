@@ -111,3 +111,61 @@ def test_digest_binding_needs_channel_id(tmp_path):
             digest: {cadence: weekly, tz: UTC, anchor: branch}
     """))
     assert cfg.digest_bindings() == ()
+
+
+def _write_cfg(tmp_path, body):
+    p = tmp_path / "channels.yaml"
+    p.write_text(body)
+    return p
+
+
+_PROJECT_WITH_TOPIC = (
+    "projects:\n"
+    "  - name: MyTV\n    owner: o\n    repo: MyTV\n    visibility: public\n"
+    "    channel_id: C1\n    dm: false\n"
+    "    digest:\n      cadence: weekly\n      tz: UTC\n      anchor: branch\n"
+    "      topic:\n        name: security\n        description: auth, secrets, CVEs\n"
+)
+
+
+def test_digest_topic_parses(tmp_path):
+    from babbla.config import load_config, Topic
+    cfg = load_config(_write_cfg(tmp_path, _PROJECT_WITH_TOPIC))
+    assert cfg.bindings[0].digest.topic == Topic(name="security", description="auth, secrets, CVEs")
+
+
+def test_digest_topic_absent_is_none(tmp_path):
+    from babbla.config import load_config
+    body = (
+        "projects:\n  - name: MyTV\n    owner: o\n    repo: MyTV\n    visibility: public\n"
+        "    channel_id: C1\n    dm: false\n"
+        "    digest:\n      cadence: weekly\n      tz: UTC\n      anchor: branch\n"
+    )
+    cfg = load_config(_write_cfg(tmp_path, body))
+    assert cfg.bindings[0].digest.topic is None
+
+
+def test_digest_topic_missing_name_raises(tmp_path):
+    import pytest
+    from babbla.config import load_config
+    body = (
+        "projects:\n  - name: MyTV\n    owner: o\n    repo: MyTV\n    visibility: public\n"
+        "    channel_id: C1\n    dm: false\n"
+        "    digest:\n      cadence: weekly\n      tz: UTC\n      anchor: branch\n"
+        "      topic:\n        description: only a description\n"
+    )
+    with pytest.raises(ValueError, match="topic requires both name and description"):
+        load_config(_write_cfg(tmp_path, body))
+
+
+def test_digest_topic_missing_description_raises(tmp_path):
+    import pytest
+    from babbla.config import load_config
+    body = (
+        "projects:\n  - name: MyTV\n    owner: o\n    repo: MyTV\n    visibility: public\n"
+        "    channel_id: C1\n    dm: false\n"
+        "    digest:\n      cadence: weekly\n      tz: UTC\n      anchor: branch\n"
+        "      topic:\n        name: security\n"
+    )
+    with pytest.raises(ValueError, match="topic requires both name and description"):
+        load_config(_write_cfg(tmp_path, body))

@@ -45,8 +45,9 @@ class PerProjectDigestAction:
 
     async def _emit(self, changes, head: str, now: datetime) -> None:
         if changes:
-            text = await self._runner.summarize(self._b, changes, head)
-            await self._poster.post(self._b.channel_id, text)
+            text = await self._runner.summarize(self._b, changes, head, topic=self._b.digest.topic)
+            if text.strip():
+                await self._poster.post(self._b.channel_id, text)
         await self._store.advance(self._b.channel_id, head, now.timestamp())
 
 
@@ -95,8 +96,11 @@ class SharedDigestAction:
         if not per_project_changes:
             return  # all quiet: no post, no advance
         context_binding = self._by_name[next(iter(per_project_changes))]
-        text = await self._runner.summarize_shared(context_binding, per_project_changes)
-        await self._poster.post(sub.channel_id, text)
+        text = await self._runner.summarize_shared(
+            context_binding, per_project_changes, topic=self._sub.digest.topic
+        )
+        if text.strip():
+            await self._poster.post(sub.channel_id, text)
         await self._store.advance(sub.channel_id, heads, now.timestamp())
 
 

@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 import babbla.digest.actions as A
-from babbla.config import DigestConfig, ProjectBinding, Subscription, SubscriptionDigest
+from babbla.config import DigestConfig, ProjectBinding, Subscription, SubscriptionDigest, Topic
 from babbla.digest.actions import SharedDigestAction
 from babbla.session_store import SharedDigestState
 from babbla.digest.anchors import Change
@@ -27,7 +27,7 @@ class FakeShared:
 
 class FakeRunner:
     def __init__(self): self.calls = []
-    async def summarize_shared(self, context_binding, per_project_changes):
+    async def summarize_shared(self, context_binding, per_project_changes, topic=None):
         self.calls.append((context_binding.name, {k: [c.sha for c in v] for k, v in per_project_changes.items()}))
         return "shared-digest"
 
@@ -127,3 +127,25 @@ async def test_unknown_name_skipped_with_warning(monkeypatch, caplog):
         await action.maybe_run(NOW)
     assert store.advanced == [("C900", {"MyTV": "H1"}, NOW.timestamp())]
     assert any("Ghost" in r.message for r in caplog.records)
+
+
+class EmptySharedRunner:
+    def __init__(self): self.calls = []
+    async def summarize_shared(self, context_binding, per_project_changes, topic=None):
+        self.calls.append(topic.name if topic else None)
+        return ""
+
+
+async def test_topic_empty_advances_but_does_not_post(monkeypatch):
+    state = SharedDigestState({}, None)
+    by_name = {b.name: b for b in [_b("MyTV")]}
+    store, runner, poster = FakeShared(state), EmptySharedRunner(), FakePoster()
+    monkeypatch.setattr(A, "head_for", lambda o, r, anchor, wf, *, get_json: {"mytv": "H1"}.get(r))
+    monkeypatch.setattr(A, "changes_since", lambda o, r, since, *, get_json: [Change("a", "x", None)])
+    monkeypatch.setattr(A, "changes_between", lambda o, r, base, hd, *, get_json: [Change("a", "x", None)])
+    sub = Subscription("C900", ("MyTV",), SubscriptionDigest("weekly", "UTC", Topic("incidents", "outages")))
+    action = SharedDigestAction(sub, by_name, store, lambda path: None, runner, poster)
+    await action.maybe_run(NOW)
+    assert runner.calls == ["incidents"]                            # topic threaded
+    assert poster.posts == []                                       # silent
+    assert store.advanced == [("C900", {"MyTV": "H1"}, NOW.timestamp())]   # but advanced
