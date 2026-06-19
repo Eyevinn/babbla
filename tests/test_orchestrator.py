@@ -504,3 +504,73 @@ async def test_dm_two_subs_routes_via_classifier(store, psub):
     await psub.add("U1", "Stream")
     await orch.handle_ask(text="why HLS", thread_ts="t1", channel_id="D1", is_dm=True, user_id="U1")
     assert orch._runner.calls[0][1].name == "Stream"
+
+
+# ---------------------------------------------------------------------------
+# Topic command dispatch tests
+# ---------------------------------------------------------------------------
+from babbla import personal  # noqa: E402  (already imported transitively but explicit here)
+
+
+async def test_dispatch_topic_add_to_followed_project(store, psub):
+    orch = Orchestrator(_config_two(), FakeRunner(), store, personal_store=psub)
+    await psub.add("U1", "MyTV")
+    reply = await orch._dispatch_command("U1", personal.Command(
+        "topic-add", project="MyTV", name="security", description="auth, secrets"))
+    assert "security" in reply and "auth, secrets" in reply
+    assert (await psub.topics_for("U1")) == {"MyTV": (("security", "auth, secrets"),)}
+
+
+async def test_dispatch_topic_add_requires_following(store, psub):
+    orch = Orchestrator(_config_two(), FakeRunner(), store, personal_store=psub)
+    # not following MyTV
+    reply = await orch._dispatch_command("U1", personal.Command(
+        "topic-add", project="MyTV", name="security", description="x"))
+    assert "follow" in reply.lower()
+    assert await psub.topics_for("U1") == {}
+
+
+async def test_dispatch_topic_add_unknown_project(store, psub):
+    orch = Orchestrator(_config_two(), FakeRunner(), store, personal_store=psub)
+    reply = await orch._dispatch_command("U1", personal.Command(
+        "topic-add", project="Nope", name="x", description="y"))
+    assert "don't know that project" in reply.lower()
+    assert await psub.topics_for("U1") == {}
+
+
+async def test_dispatch_topic_add_private_refused(store, psub):
+    orch = Orchestrator(_config_two(), FakeRunner(), store, personal_store=psub)
+    # "Secret" is private
+    reply = await orch._dispatch_command("U1", personal.Command(
+        "topic-add", project="Secret", name="x", description="y"))
+    assert "private" in reply.lower()
+    assert await psub.topics_for("U1") == {}
+
+
+async def test_dispatch_topic_remove_and_list(store, psub):
+    orch = Orchestrator(_config_two(), FakeRunner(), store, personal_store=psub)
+    await psub.add("U1", "MyTV")
+    await psub.add_topic("U1", "MyTV", "security", "auth")
+    listed = await orch._dispatch_command("U1", personal.Command("topic-list"))
+    assert "MyTV" in listed and "security" in listed
+    await orch._dispatch_command("U1", personal.Command("topic-remove", project="MyTV", name="security"))
+    assert await psub.topics_for("U1") == {}
+
+
+async def test_dispatch_topic_add_description_falls_back_to_name(store, psub):
+    orch = Orchestrator(_config_two(), FakeRunner(), store, personal_store=psub)
+    await psub.add("U1", "MyTV")
+    reply = await orch._dispatch_command("U1", personal.Command(
+        "topic-add", project="MyTV", name="security", description=None))
+    assert "security" in reply
+    assert (await psub.topics_for("U1")) == {"MyTV": (("security", "security"),)}
+
+
+async def test_dispatch_topic_remove_idempotent(store, psub):
+    orch = Orchestrator(_config_two(), FakeRunner(), store, personal_store=psub)
+    await psub.add("U1", "MyTV")
+    # No topic set; removing must not raise and returns a confirmation.
+    reply = await orch._dispatch_command("U1", personal.Command(
+        "topic-remove", project="MyTV", name="security"))
+    assert "security" in reply
+    assert await psub.topics_for("U1") == {}
