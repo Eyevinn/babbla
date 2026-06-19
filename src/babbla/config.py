@@ -22,6 +22,13 @@ class DigestConfig:
 
 
 @dataclass(frozen=True)
+class QuizConfig:
+    cadence: str
+    tz: str
+    count: int = 3
+
+
+@dataclass(frozen=True)
 class ProjectBinding:
     name: str
     owner: str
@@ -30,6 +37,7 @@ class ProjectBinding:
     channel_id: str | None
     dm: bool
     digest: DigestConfig | None = None
+    quiz: QuizConfig | None = None
 
 
 @dataclass(frozen=True)
@@ -75,6 +83,9 @@ class Config:
     def digest_subscriptions(self) -> tuple[Subscription, ...]:
         return tuple(s for s in self.subscriptions if s.digest is not None)
 
+    def quiz_bindings(self) -> tuple[ProjectBinding, ...]:
+        return tuple(b for b in self.bindings if b.quiz is not None and b.channel_id)
+
 
 def _parse_cadence_tz(label: str, raw: dict | None, kind: str):
     """Shared cadence+tz parse for subscription digest / quiz. Returns (cadence, tz) or None."""
@@ -92,6 +103,16 @@ def _parse_cadence_tz(label: str, raw: dict | None, kind: str):
     except (ZoneInfoNotFoundError, ValueError) as exc:
         raise ValueError(f"{label}: {kind}.tz is not a valid time zone: {tz!r}") from exc
     return cadence, tz
+
+
+def _parse_quiz(name: str, raw: dict | None) -> QuizConfig | None:
+    ct = _parse_cadence_tz(name, raw, "quiz")
+    if ct is None:
+        return None
+    count = raw.get("count", 3)
+    if not isinstance(count, int) or isinstance(count, bool) or count < 1:
+        raise ValueError(f"{name}: quiz.count must be a positive integer, got {count!r}")
+    return QuizConfig(cadence=ct[0], tz=ct[1], count=count)
 
 
 def _parse_subscriptions(raw_subs, known_names: set[str]) -> tuple[Subscription, ...]:
@@ -162,6 +183,7 @@ def load_config(path: str | os.PathLike) -> Config:
             channel_id=p.get("channel_id"),
             dm=bool(p.get("dm", False)),
             digest=_parse_digest(p["name"], p.get("digest")),
+            quiz=_parse_quiz(p["name"], p.get("quiz")),
         )
         for p in raw.get("projects", [])
     )

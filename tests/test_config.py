@@ -4,7 +4,7 @@ import logging
 
 import pytest
 
-from babbla.config import Config, ProjectBinding, load_config, SubscriptionDigest
+from babbla.config import Config, ProjectBinding, load_config, SubscriptionDigest, QuizConfig
 
 FIXTURE = """
 projects:
@@ -199,4 +199,49 @@ def test_subscription_digest_bad_cadence_raises(tmp_path):
 def test_subscription_digest_bad_tz_raises(tmp_path):
     text = SUBS_DIGEST_FIXTURE.replace("tz: Europe/Stockholm", "tz: Mars/Phobos")
     with pytest.raises(ValueError, match="time zone"):
+        load_config(_write(tmp_path, text))
+
+
+QUIZ_FIXTURE = """
+projects:
+  - name: MyTV
+    owner: Wkkkkk
+    repo: MyTV
+    visibility: public
+    channel_id: C123
+    dm: true
+    quiz:
+      cadence: weekly
+      tz: Europe/Stockholm
+      count: 5
+"""
+
+
+def test_quiz_parsed(tmp_path):
+    cfg = load_config(_write(tmp_path, QUIZ_FIXTURE))
+    assert cfg.bindings[0].quiz == QuizConfig(cadence="weekly", tz="Europe/Stockholm", count=5)
+
+
+def test_quiz_count_defaults_to_three(tmp_path):
+    text = QUIZ_FIXTURE.replace("      count: 5\n", "")
+    cfg = load_config(_write(tmp_path, text))
+    assert cfg.bindings[0].quiz.count == 3
+
+
+def test_quiz_absent_is_none(tmp_path):
+    cfg = load_config(_write(tmp_path, FIXTURE))
+    assert cfg.bindings[0].quiz is None
+
+
+def test_quiz_bindings_requires_channel(tmp_path):
+    cfg = load_config(_write(tmp_path, QUIZ_FIXTURE))
+    assert tuple(b.name for b in cfg.quiz_bindings()) == ("MyTV",)
+    text = QUIZ_FIXTURE.replace("channel_id: C123", "channel_id: null")
+    cfg2 = load_config(_write(tmp_path, text))
+    assert cfg2.quiz_bindings() == ()          # no channel to post to
+
+
+def test_quiz_bad_count_raises(tmp_path):
+    text = QUIZ_FIXTURE.replace("count: 5", "count: 0")
+    with pytest.raises(ValueError, match="quiz.count"):
         load_config(_write(tmp_path, text))
