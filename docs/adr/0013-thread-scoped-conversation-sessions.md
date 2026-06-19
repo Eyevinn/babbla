@@ -58,6 +58,21 @@ channel. A fresh *top-level* `@`-mention (not a reply within the bot's thread) g
 a new `thread_ts` and therefore a new session with no shared context. To continue,
 reply within the thread **and** mention the bot.
 
+### Sessions are keyed on `thread_ts`, not per-user
+
+The session key has no user dimension — it is the `thread_ts` alone. In a channel
+or Lobby thread, **all participants share one session and its accumulated context**:
+if user B `@`-mentions the bot inside a thread user A started, B *continues A's
+conversation* and inherits A's prior turns, rather than starting a fresh one. (DMs
+are unaffected: a DM is a private 1:1 channel, so two users are never in the same
+thread.)
+
+This is intended and not a leakage concern — access is Slack channel membership
+([0007](0007-access-visibility-redaction.md)), everyone in the channel can already
+read the whole thread, and the session only holds read-only public/internal GitHub
+data scoped to that thread's project. The behavior to be aware of is simply that a
+shared thread is a shared conversation.
+
 ## Consequences
 
 - **The conversation boundary is exactly the Slack thread.** Replying in-thread
