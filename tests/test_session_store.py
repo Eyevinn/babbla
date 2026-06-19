@@ -1,4 +1,4 @@
-from babbla.session_store import SessionStore, LobbyThreadStore, PersonalSubStore
+from babbla.session_store import SessionStore, LobbyThreadStore, PersonalSubStore, PersonalDigestStateStore
 
 
 async def test_put_then_get_roundtrip(tmp_path):
@@ -108,4 +108,22 @@ async def test_personal_cadence_default_none_then_roundtrip(tmp_path):
     assert await s.get_cadence("U1") == "daily"
     await s.set_cadence("U1", "off")
     assert await s.get_cadence("U1") == "off"
+    s.close()
+
+
+async def test_personal_digest_state_empty(tmp_path):
+    s = PersonalDigestStateStore(str(tmp_path / "s.db"))
+    state = await s.get("U1")
+    assert state.watermarks == {} and state.last_digest_at is None
+    s.close()
+
+
+async def test_personal_digest_state_advance_roundtrip(tmp_path):
+    s = PersonalDigestStateStore(str(tmp_path / "s.db"))
+    await s.advance("U1", {"MyTV": "sha1", "Stream": "sha2"}, 1000.0)
+    state = await s.get("U1")
+    assert state.watermarks == {"MyTV": "sha1", "Stream": "sha2"}
+    assert state.last_digest_at == 1000.0
+    # isolation between users
+    assert (await s.get("U2")).watermarks == {}
     s.close()

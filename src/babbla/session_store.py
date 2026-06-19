@@ -347,3 +347,52 @@ class PersonalSubStore:
 
     def close(self) -> None:
         self._conn.close()
+
+
+_PERSONAL_DIGEST_SCHEMA = """
+CREATE TABLE IF NOT EXISTS personal_digest_state (
+    user_id        TEXT NOT NULL,
+    project_name   TEXT NOT NULL,
+    watermark_sha  TEXT,
+    last_digest_at REAL,
+    PRIMARY KEY (user_id, project_name)
+)
+"""
+
+
+class PersonalDigestStateStore:
+    """Per-user-per-project digest watermark; mirrors SharedDigestStateStore."""
+
+    def __init__(self, db_path: str) -> None:
+        self._conn = sqlite3.connect(db_path, check_same_thread=False)
+        self._conn.execute(_PERSONAL_DIGEST_SCHEMA)
+        self._conn.commit()
+
+    async def get(self, user_id: str) -> SharedDigestState:
+        return await asyncio.to_thread(self._get_sync, user_id)
+
+    def _get_sync(self, user_id: str) -> SharedDigestState:
+        rows = self._conn.execute(
+            "SELECT project_name, watermark_sha, last_digest_at FROM personal_digest_state "
+            "WHERE user_id = ?",
+            (user_id,),
+        ).fetchall()
+        watermarks = {r[0]: r[1] for r in rows}
+        last = max((r[2] for r in rows if r[2] is not None), default=None)
+        return SharedDigestState(watermarks=watermarks, last_digest_at=last)
+
+    async def advance(self, user_id: str, heads: dict[str, str], last_digest_at: float) -> None:
+        await asyncio.to_thread(self._advance_sync, user_id, heads, last_digest_at)
+
+    def _advance_sync(self, user_id: str, heads: dict[str, str], last_digest_at: float) -> None:
+        for project_name, head in heads.items():
+            self._conn.execute(
+                "INSERT INTO personal_digest_state (user_id, project_name, watermark_sha, last_digest_at) "
+                "VALUES (?, ?, ?, ?) ON CONFLICT(user_id, project_name) DO UPDATE SET "
+                "watermark_sha = excluded.watermark_sha, last_digest_at = excluded.last_digest_at",
+                (user_id, project_name, head, last_digest_at),
+            )
+        self._conn.commit()
+
+    def close(self) -> None:
+        self._conn.close()
