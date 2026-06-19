@@ -17,6 +17,7 @@ class Orchestrator:
         self, config: Config, runner, store, *,
         catalog=(), classify_fn=None, lobby_store=None,
         personal_store=None, personal_default_cadence: str = "weekly",
+        intent_fn=None,
     ) -> None:
         self._config = config
         self._runner = runner
@@ -25,6 +26,7 @@ class Orchestrator:
         self._classify_fn = classify_fn
         self._lobby_store = lobby_store
         self._personal_store = personal_store
+        self._intent_fn = intent_fn
         self._personal_default_cadence = personal_default_cadence
         self._locks: dict[str, asyncio.Lock] = {}
 
@@ -53,7 +55,9 @@ class Orchestrator:
         return binding
 
     async def handle_command(self, user_id: str, text: str) -> str:
-        cmd = personal.parse_command(text)
+        return await self._dispatch_command(user_id, personal.parse_command(text))
+
+    async def _dispatch_command(self, user_id: str, cmd: personal.Command) -> str:
         if cmd.verb == "help":
             return personal.render_help()
         if cmd.verb == "list":
@@ -82,6 +86,19 @@ class Orchestrator:
         self, *, text: str, thread_ts: str, channel_id: str, is_dm: bool,
         user_id: str | None = None,
     ) -> CitedAnswer:
+        # DM-only: a free-text subscription-management request ("follow MyTV",
+        # "stop sending me X", "make my digest daily") is dispatched as a command
+        # and never reaches the read-only Q&A agent.
+        if (
+            is_dm and user_id is not None
+            and self._intent_fn is not None and self._personal_store is not None
+        ):
+            cmd = await personal.classify_intent(
+                text, [b.name for b in self._config.bindings], self._intent_fn
+            )
+            if cmd is not None:
+                reply = await self._dispatch_command(user_id, cmd)
+                return CitedAnswer(text=reply, session_id=None)
         if not is_dm:
             sub = self._config.subscription_for(channel_id)
             if sub is not None:
