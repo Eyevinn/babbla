@@ -47,6 +47,12 @@ class SubscriptionDigest:
 
 
 @dataclass(frozen=True)
+class PersonalDigestConfig:
+    default_cadence: str
+    tz: str
+
+
+@dataclass(frozen=True)
 class Subscription:
     channel_id: str
     project_names: tuple[str, ...]
@@ -58,6 +64,7 @@ class Config:
     bindings: tuple[ProjectBinding, ...]
     lobby_channel_id: str | None = None
     subscriptions: tuple[Subscription, ...] = ()
+    personal_digest: "PersonalDigestConfig | None" = None
 
     def for_channel(self, channel_id: str) -> ProjectBinding | None:
         for b in self.bindings:
@@ -171,6 +178,22 @@ def _parse_digest(name: str, raw: dict | None) -> DigestConfig | None:
     return DigestConfig(cadence=cadence, tz=tz, anchor=anchor, deploy_workflow=deploy_workflow)
 
 
+def _parse_personal_digest(raw: dict | None) -> "PersonalDigestConfig | None":
+    if not raw:
+        return None
+    cadence = str(raw.get("default_cadence", "weekly"))
+    if cadence not in _CADENCES:
+        raise ValueError(
+            f"personal_digest.default_cadence must be one of daily|weekly, got {cadence!r}"
+        )
+    tz = str(raw.get("tz", "UTC"))
+    try:
+        ZoneInfo(tz)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise ValueError(f"personal_digest.tz is not a valid time zone: {tz!r}") from exc
+    return PersonalDigestConfig(default_cadence=cadence, tz=tz)
+
+
 def load_config(path: str | os.PathLike) -> Config:
     with open(path, "r", encoding="utf-8") as fh:
         raw = yaml.safe_load(fh) or {}
@@ -205,8 +228,10 @@ def load_config(path: str | os.PathLike) -> Config:
                 "the lobby dispatch wins, so the subscription is shadowed.",
                 sub.channel_id,
             )
+    personal_digest = _parse_personal_digest(raw.get("personal_digest"))
     return Config(
         bindings=bindings,
         lobby_channel_id=lobby_channel_id,
         subscriptions=subscriptions,
+        personal_digest=personal_digest,
     )
