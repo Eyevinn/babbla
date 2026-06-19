@@ -20,6 +20,7 @@ from babbla.digest.quiz import QuizRunner
 from babbla.digest.runner import DigestRunner
 from babbla.digest.scheduler import ActionScheduler
 from babbla.lobby import build_catalog, make_classify_fn
+from babbla.personal import make_intent_fn
 from babbla.orchestrator import Orchestrator
 from babbla.read_only import DEFAULT_MODEL
 from babbla.session_store import (
@@ -55,10 +56,12 @@ def build_orchestrator(*, config_path: str, db_path: str, secrets: Secrets, get_
     store = SessionStore(db_path)
     personal_store = PersonalSubStore(db_path)
     default_cadence = config.personal_digest.default_cadence if config.personal_digest else "weekly"
+    intent_fn = make_intent_fn(_sdk_query, secrets.model)
     if config.lobby_channel_id is None and not config.subscriptions and config.personal_digest is None:
         return Orchestrator(
             config, runner, store,
             personal_store=personal_store, personal_default_cadence=default_cadence,
+            intent_fn=intent_fn,
         )
     reader = get_json or make_get_json(secrets.github_token)
     catalog = build_catalog([b for b in config.bindings], reader)
@@ -69,6 +72,7 @@ def build_orchestrator(*, config_path: str, db_path: str, secrets: Secrets, get_
         lobby_store=LobbyThreadStore(db_path),
         personal_store=personal_store,
         personal_default_cadence=default_cadence,
+        intent_fn=intent_fn,
     )
 
 

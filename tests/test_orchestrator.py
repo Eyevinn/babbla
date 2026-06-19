@@ -394,6 +394,54 @@ async def test_handle_command_subscribe_private_refused(store, psub):
     assert await psub.list_for("U1") == ()
 
 
+def _intent_fn(reply, recorder=None):
+    async def fn(text, names):
+        if recorder is not None:
+            recorder.append((text, tuple(names)))
+        return reply
+    return fn
+
+
+async def test_dm_management_intent_dispatches_without_invoking_runner(store, psub):
+    runner = FakeRunner()
+    orch = Orchestrator(_config_two(), runner, store, personal_store=psub,
+                        intent_fn=_intent_fn("subscribe MyTV"))
+    ans = await orch.handle_ask(
+        text="please follow MyTV for me", thread_ts="t1",
+        channel_id="D1", is_dm=True, user_id="U1",
+    )
+    assert "MyTV" in ans.text
+    assert ans.session_id is None
+    assert await psub.list_for("U1") == ("MyTV",)
+    assert runner.calls == []           # read-only Q&A agent never reached
+
+
+async def test_dm_non_management_falls_through_to_qa(store, psub):
+    runner = FakeRunner()
+    orch = Orchestrator(_config_two(), runner, store, personal_store=psub,
+                        intent_fn=_intent_fn("NONE"))
+    ans = await orch.handle_ask(
+        text="how does the digest work?", thread_ts="t1",
+        channel_id="D1", is_dm=True, user_id="U1",
+    )
+    assert ans.text == "answer to how does the digest work?"
+    assert len(runner.calls) == 1       # answered by the Q&A agent
+
+
+async def test_channel_message_never_consults_intent_shim(store, psub):
+    recorder = []
+    runner = FakeRunner()
+    orch = Orchestrator(_config_two(), runner, store, personal_store=psub,
+                        intent_fn=_intent_fn("subscribe MyTV", recorder))
+    await orch.handle_ask(
+        text="subscribe MyTV", thread_ts="t1",
+        channel_id="C1", is_dm=False, user_id="U1",   # C1 == MyTV's channel
+    )
+    assert recorder == []               # intent shim is DM-only
+    assert len(runner.calls) == 1       # treated as a normal channel Ask
+    assert await psub.list_for("U1") == ()
+
+
 async def test_handle_command_unsubscribe(store, psub):
     orch = Orchestrator(_config_two(), FakeRunner(), store, personal_store=psub)
     await psub.add("U1", "MyTV")

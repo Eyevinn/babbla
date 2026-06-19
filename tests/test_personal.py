@@ -56,3 +56,68 @@ def test_render_list_with_and_without_subs():
 def test_render_private_and_unknown():
     assert "private" in personal.render_private_refused("Secret").lower()
     assert "MyTV" in personal.render_unknown_project(["MyTV", "Stream"])
+
+
+def _intent(reply):
+    async def fn(text, names):
+        return reply
+    return fn
+
+
+async def test_classify_intent_none_reply_is_not_a_command():
+    assert await personal.classify_intent("how does auth work?", ["MyTV"], _intent("NONE")) is None
+
+
+async def test_classify_intent_subscribe():
+    assert await personal.classify_intent(
+        "follow MyTV for me", ["MyTV"], _intent("subscribe MyTV")
+    ) == Command("subscribe", "MyTV")
+
+
+async def test_classify_intent_subscribe_multiword():
+    assert await personal.classify_intent(
+        "start following the agentic kit", ["Agentic Engineering Kit"],
+        _intent("subscribe Agentic Engineering Kit"),
+    ) == Command("subscribe", "Agentic Engineering Kit")
+
+
+async def test_classify_intent_digest_and_list():
+    assert await personal.classify_intent(
+        "make my digest daily", [], _intent("digest daily")
+    ) == Command("digest", "daily")
+    assert await personal.classify_intent(
+        "what am I following?", [], _intent("list")
+    ) == Command("list")
+
+
+async def test_classify_intent_unsubscribe():
+    assert await personal.classify_intent(
+        "stop sending me MyTV", ["MyTV"], _intent("unsubscribe MyTV")
+    ) == Command("unsubscribe", "MyTV")
+
+
+async def test_classify_intent_prose_reply_is_not_a_command():
+    # Classifier answered in prose rather than the command grammar → fall through to Q&A.
+    assert await personal.classify_intent(
+        "hello", [], _intent("This looks like a question about the repo.")
+    ) is None
+
+
+async def test_classify_intent_empty_reply_is_not_a_command():
+    assert await personal.classify_intent("hi", [], _intent("")) is None
+
+
+async def test_classify_intent_strips_backticks():
+    assert await personal.classify_intent("show me", [], _intent("`list`")) == Command("list")
+
+
+async def test_classify_intent_ignores_reasoning_before_command_line():
+    reply = "The user wants to set their digest cadence.\n\n`digest daily`"
+    assert await personal.classify_intent(
+        "make my digest daily", [], _intent(reply)
+    ) == Command("digest", "daily")
+
+
+async def test_classify_intent_none_after_reasoning_is_not_a_command():
+    reply = "This reads like a question about the repo, not a subscription change.\nNONE"
+    assert await personal.classify_intent("how does X work?", [], _intent(reply)) is None
