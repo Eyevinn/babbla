@@ -26,12 +26,13 @@ async def process_ask(
     is_dm: bool,
     client,
     orchestrator: Orchestrator,
+    user_id: str | None = None,
 ) -> None:
     placeholder = await client.chat_postMessage(channel=channel, thread_ts=thread_ts, text=PLACEHOLDER)
     ts = placeholder["ts"]
     try:
         answer = await orchestrator.handle_ask(
-            text=text, thread_ts=thread_ts, channel_id=channel, is_dm=is_dm
+            text=text, thread_ts=thread_ts, channel_id=channel, is_dm=is_dm, user_id=user_id
         )
         await client.chat_update(channel=channel, ts=ts, text=answer.text)
     except Exception:  # one failed Ask must never crash the process
@@ -102,5 +103,16 @@ def register_handlers(app, orchestrator: Orchestrator, lobby_channel_id: str | N
                 is_dm=True,
                 client=client,
                 orchestrator=orchestrator,
+                user_id=event.get("user"),
             )
         )
+
+    @app.command("/babbla")
+    async def _on_command(ack, command, respond):
+        await ack()
+        try:
+            reply = await orchestrator.handle_command(command["user_id"], command.get("text", ""))
+        except Exception:
+            logger.exception("/babbla command failed for user %s", command.get("user_id"))
+            reply = "⚠️ Couldn't update your subscriptions right now — please try again shortly."
+        await respond(reply)

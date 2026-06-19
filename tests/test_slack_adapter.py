@@ -33,12 +33,18 @@ class FakeOrch:
         self.answer = answer
         self.exc = exc
         self.calls = []
+        self.command_calls = []
 
-    async def handle_ask(self, *, text, thread_ts, channel_id, is_dm):
-        self.calls.append({"text": text, "thread_ts": thread_ts, "channel_id": channel_id, "is_dm": is_dm})
+    async def handle_ask(self, *, text, thread_ts, channel_id, is_dm, user_id=None):
+        self.calls.append({"text": text, "thread_ts": thread_ts, "channel_id": channel_id,
+                           "is_dm": is_dm, "user_id": user_id})
         if self.exc:
             raise self.exc
         return self.answer
+
+    async def handle_command(self, user_id, text):
+        self.command_calls.append((user_id, text))
+        return "command-reply"
 
 
 def test_clean_mention_text_strips_bot():
@@ -91,6 +97,12 @@ class FakeApp:
     def event(self, name):
         def deco(fn):
             self.handlers[name] = fn
+            return fn
+        return deco
+
+    def command(self, name):
+        def deco(fn):
+            self.handlers[("command", name)] = fn
             return fn
         return deco
 
@@ -241,6 +253,12 @@ async def test_register_handlers_dispatches_lobby_vs_ask():
                 return fn
             return deco
 
+        def command(self, name):
+            def deco(fn):
+                self.handlers[("command", name)] = fn
+                return fn
+            return deco
+
     class DualOrch:
         def __init__(self):
             self.lobby_calls = []
@@ -250,7 +268,7 @@ async def test_register_handlers_dispatches_lobby_vs_ask():
             self.lobby_calls.append(text)
             return CitedAnswer(text="lobby", session_id=None)
 
-        async def handle_ask(self, *, text, thread_ts, channel_id, is_dm):
+        async def handle_ask(self, *, text, thread_ts, channel_id, is_dm, user_id=None):
             self.ask_calls.append((text, channel_id))
             return CitedAnswer(text="ask", session_id=None)
 
@@ -266,3 +284,33 @@ async def test_register_handlers_dispatches_lobby_vs_ask():
 
     assert orch.lobby_calls == ["hi"]
     assert orch.ask_calls == [("hey", "C999")]
+
+
+async def test_dm_message_passes_user_id():
+    app = FakeApp()
+    client = FakeClient()
+    orch = FakeOrch(answer=CitedAnswer(text="ok", session_id="s1"))
+    register_handlers(app, orch)
+    event = {"text": "q", "channel": "D1", "ts": "t2", "channel_type": "im", "user": "U7"}
+    await app.handlers["message"](event=event, client=client)
+    await asyncio.sleep(0)
+    assert orch.calls[0]["user_id"] == "U7"
+    assert orch.calls[0]["is_dm"] is True
+
+
+async def test_babbla_command_acks_and_responds():
+    app = FakeApp()
+    orch = FakeOrch()
+    register_handlers(app, orch)
+    acked = []
+    responded = []
+    async def ack():
+        acked.append(True)
+    async def respond(text):
+        responded.append(text)
+    await app.handlers[("command", "/babbla")](
+        ack=ack, command={"user_id": "U7", "text": "subscribe MyTV"}, respond=respond
+    )
+    assert acked == [True]
+    assert orch.command_calls == [("U7", "subscribe MyTV")]
+    assert responded == ["command-reply"]
