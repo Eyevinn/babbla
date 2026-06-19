@@ -26,9 +26,21 @@ class FakeRunner:
 
 
 class FakePoster:
-    def __init__(self): self.posts = []
-    async def post(self, channel_id, text, thread_ts=None):
-        self.posts.append((channel_id, text)); return "ts"
+    def __init__(self): self.posts = []; self.blocks = []
+    async def post(self, channel_id, text, thread_ts=None, blocks=None):
+        self.posts.append((channel_id, text)); self.blocks.append(blocks); return "ts"
+
+
+def _action_ids(blocks):
+    return [e["action_id"] for b in (blocks or []) if b.get("type") == "actions"
+            for e in b["elements"]]
+
+
+def _btn_value(blocks):
+    for b in blocks or []:
+        if b.get("type") == "actions":
+            return b["elements"][0]["value"]
+    return None
 
 
 def _action(binding, state, *, head, changes, monkeypatch):
@@ -59,6 +71,16 @@ async def test_first_run_branch_posts_window_and_sets_watermark(monkeypatch):
     assert runner.calls == [("MyTV", ["c1"], "H")]
     assert poster.posts == [("C0XXXXXXXXX", "digest:H")]
     assert store.advanced == [("C0XXXXXXXXX", "H", NOW.timestamp())]
+
+
+async def test_digest_post_carries_delete_button_for_anyone(monkeypatch):
+    from babbla.blocks import DELETE_ACTION_ID
+    action, store, runner, poster = _action(
+        _binding(), DigestState(None, None), head="H",
+        changes=[Change("c1", "feat: a (#1)", 1)], monkeypatch=monkeypatch)
+    await action.maybe_run(NOW)
+    assert DELETE_ACTION_ID in _action_ids(poster.blocks[-1])
+    assert _btn_value(poster.blocks[-1]) == ""   # channel digest: anyone may delete
 
 
 async def test_first_run_deploy_is_silent_but_sets_watermark(monkeypatch):

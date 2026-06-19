@@ -28,8 +28,9 @@ class FakePoster:
             raise RuntimeError("cannot open dm")
         return f"D-{user_id}"
 
-    async def post(self, channel_id, text, thread_ts=None):
+    async def post(self, channel_id, text, thread_ts=None, blocks=None):
         self.posts.append((channel_id, text))
+        self.blocks = blocks
         return "ts-1"
 
 
@@ -90,6 +91,25 @@ async def test_private_project_filtered_at_send_time(tmp_path):
                                   FakeRunner(), poster, "weekly", "UTC")
     await action.maybe_run(NOW)
     assert poster.posts == []              # no changes gathered → no DM
+    subs.close()
+    state.close()
+
+
+async def test_personal_digest_dm_carries_delete_button_owned_by_user(tmp_path):
+    from babbla.blocks import DELETE_ACTION_ID
+    subs, state = await _store_pair(tmp_path)
+    await subs.add("U1", "MyTV")           # open-tier → a DM digest is sent
+    poster = FakePoster()
+    action = PersonalDigestAction(subs, state, BY_NAME,
+                                  _get_json_with_commits("sha1", [{"sha": "sha1"}]),
+                                  FakeRunner(), poster, "weekly", "UTC")
+    await action.maybe_run(NOW)
+    assert poster.posts == [("D-U1", "digest text")]   # delivered to U1's DM
+    ids = [e["action_id"] for b in (poster.blocks or []) if b.get("type") == "actions"
+           for e in b["elements"]]
+    assert DELETE_ACTION_ID in ids
+    value = next(b["elements"][0]["value"] for b in poster.blocks if b.get("type") == "actions")
+    assert value == "U1"                   # only the recipient may delete their digest
     subs.close()
     state.close()
 

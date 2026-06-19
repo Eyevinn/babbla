@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timedelta
 
 from babbla.access import is_open_tier
+from babbla.blocks import delete_button_blocks
 from babbla.digest.anchors import changes_between, changes_since, current_head, head_for
 from babbla.digest.cadence import is_due
 
@@ -48,7 +49,9 @@ class PerProjectDigestAction:
         if changes:
             text = await self._runner.summarize(self._b, changes, head, topic=self._b.digest.topic)
             if text.strip():
-                await self._poster.post(self._b.channel_id, text)
+                await self._poster.post(
+                    self._b.channel_id, text, blocks=delete_button_blocks(text)
+                )
         await self._store.advance(self._b.channel_id, head, now.timestamp())
 
 
@@ -101,7 +104,7 @@ class SharedDigestAction:
             context_binding, per_project_changes, topic=self._sub.digest.topic
         )
         if text.strip():
-            await self._poster.post(sub.channel_id, text)
+            await self._poster.post(sub.channel_id, text, blocks=delete_button_blocks(text))
         await self._store.advance(sub.channel_id, heads, now.timestamp())
 
 
@@ -164,7 +167,7 @@ class PersonalDigestAction:
         context_binding = self._by_name[next(iter(per_project_changes))]
         text = await self._runner.summarize_shared(context_binding, per_project_changes)
         dm_channel = await self._poster.open_dm(user_id)
-        await self._poster.post(dm_channel, text)
+        await self._poster.post(dm_channel, text, blocks=delete_button_blocks(text, owner_id=user_id))
         await self._state.advance(user_id, heads, now.timestamp())
 
 

@@ -33,9 +33,9 @@ class FakeRunner:
 
 
 class FakePoster:
-    def __init__(self): self.posts = []
-    async def post(self, channel_id, text, thread_ts=None):
-        self.posts.append((channel_id, text)); return "ts"
+    def __init__(self): self.posts = []; self.blocks = []
+    async def post(self, channel_id, text, thread_ts=None, blocks=None):
+        self.posts.append((channel_id, text)); self.blocks.append(blocks); return "ts"
 
 
 def _action(sub, bindings, state, *, heads, changes_map, monkeypatch):
@@ -68,6 +68,10 @@ async def test_first_run_bootstrap_posts_and_advances_all(monkeypatch):
     assert runner.calls == [("MyTV", {"MyTV": ["a"], "Stream": ["b"]})]
     assert poster.posts == [("C900", "shared-digest")]
     assert store.advanced == [("C900", {"MyTV": "H1", "Stream": "H2"}, NOW.timestamp())]
+    from babbla.blocks import DELETE_ACTION_ID
+    btn = next(b["elements"][0] for b in poster.blocks[-1] if b.get("type") == "actions")
+    assert btn["action_id"] == DELETE_ACTION_ID
+    assert btn["value"] == ""   # shared channel digest: anyone may delete
 
 
 async def test_all_quiet_no_post_no_advance(monkeypatch):

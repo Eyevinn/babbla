@@ -3,9 +3,12 @@ import asyncio
 import pytest
 
 from babbla.agent_runner import CitedAnswer
+from babbla.blocks import DELETE_ACTION_ID
 from babbla.slack_adapter import (
     ERROR_TEXT,
     PLACEHOLDER,
+    _delete_owner,
+    _delete_target,
     _is_lobby,
     clean_mention_text,
     process_ask,
@@ -14,17 +17,36 @@ from babbla.slack_adapter import (
 )
 
 
+def _action_ids(blocks):
+    return [
+        e["action_id"]
+        for b in (blocks or [])
+        if b.get("type") == "actions"
+        for e in b["elements"]
+    ]
+
+
 class FakeClient:
     def __init__(self):
         self.posted = None
         self.updates = []
+        self.deleted = []
+        self.ephemeral = None
 
-    async def chat_postMessage(self, *, channel, thread_ts, text):
-        self.posted = {"channel": channel, "thread_ts": thread_ts, "text": text}
+    async def chat_postMessage(self, *, channel, thread_ts, text, blocks=None):
+        self.posted = {"channel": channel, "thread_ts": thread_ts, "text": text, "blocks": blocks}
         return {"ts": "msg-1"}
 
-    async def chat_update(self, *, channel, ts, text):
-        self.updates.append({"channel": channel, "ts": ts, "text": text})
+    async def chat_update(self, *, channel, ts, text, blocks=None):
+        self.updates.append({"channel": channel, "ts": ts, "text": text, "blocks": blocks})
+        return {"ok": True}
+
+    async def chat_delete(self, *, channel, ts):
+        self.deleted.append({"channel": channel, "ts": ts})
+        return {"ok": True}
+
+    async def chat_postEphemeral(self, *, channel, user, text):
+        self.ephemeral = {"channel": channel, "user": user, "text": text}
         return {"ok": True}
 
 
@@ -106,6 +128,12 @@ class FakeApp:
             return fn
         return deco
 
+    def action(self, name):
+        def deco(fn):
+            self.handlers[("action", name)] = fn
+            return fn
+        return deco
+
 
 async def test_mention_handler_invokes_process_ask_not_dm():
     """app_mention handler dispatches process_ask with is_dm=False."""
@@ -169,6 +197,20 @@ async def test_dm_message_handler_invokes_process_ask_with_is_dm():
     assert orch.calls[0]["channel_id"] == "D1"
 
 
+async def test_mention_handler_passes_asker_user_id():
+    """Channel @mentions thread the asker's user id through to process_ask."""
+    app = FakeApp()
+    client = FakeClient()
+    orch = FakeOrch(answer=CitedAnswer(text="ok", session_id="s1"))
+    register_handlers(app, orch)
+
+    event = {"text": "<@UBOT> q", "channel": "C1", "ts": "t1", "user": "Uasker"}
+    await app.handlers["app_mention"](event=event, client=client)
+    await asyncio.sleep(0)
+
+    assert orch.calls[0]["user_id"] == "Uasker"
+
+
 async def test_dm_message_handler_ignores_non_dm_channel():
     """message handler does NOT invoke process_ask when channel_type != 'im'."""
     app = FakeApp()
@@ -181,6 +223,31 @@ async def test_dm_message_handler_ignores_non_dm_channel():
     await asyncio.sleep(0)
 
     assert len(orch.calls) == 0
+
+
+async def test_dm_message_handler_ignores_deletions_and_edits():
+    """A deleted/edited DM arrives as a message event with a subtype — never an Ask."""
+    app = FakeApp()
+    client = FakeClient()
+    orch = FakeOrch(answer=CitedAnswer(text="ok", session_id="s1"))
+    register_handlers(app, orch)
+
+    deleted = {
+        "channel": "D1", "ts": "t5", "channel_type": "im",
+        "subtype": "message_deleted",
+        "previous_message": {"text": "what I typed", "user": "U7"},
+    }
+    changed = {
+        "channel": "D1", "ts": "t6", "channel_type": "im",
+        "subtype": "message_changed",
+        "message": {"text": "edited text", "user": "U7"},
+    }
+    await app.handlers["message"](event=deleted, client=client)
+    await app.handlers["message"](event=changed, client=client)
+    await asyncio.sleep(0)
+
+    assert len(orch.calls) == 0
+    assert client.posted is None  # no placeholder posted either
 
 
 async def test_dm_message_handler_ignores_bot_echo():
@@ -259,6 +326,12 @@ async def test_register_handlers_dispatches_lobby_vs_ask():
                 return fn
             return deco
 
+        def action(self, name):
+            def deco(fn):
+                self.handlers[("action", name)] = fn
+                return fn
+            return deco
+
     class DualOrch:
         def __init__(self):
             self.lobby_calls = []
@@ -296,6 +369,101 @@ async def test_dm_message_passes_user_id():
     await asyncio.sleep(0)
     assert orch.calls[0]["user_id"] == "U7"
     assert orch.calls[0]["is_dm"] is True
+
+
+def _button_value(blocks):
+    for b in blocks or []:
+        if b.get("type") == "actions":
+            return b["elements"][0]["value"]
+    return None
+
+
+async def test_process_ask_attaches_delete_button_with_asker_as_owner():
+    client = FakeClient()
+    orch = FakeOrch(answer=CitedAnswer(text="the answer", session_id="s1"))
+    await process_ask(
+        text="q", channel="D1", thread_ts="t1", is_dm=True,
+        client=client, orchestrator=orch, user_id="U7",
+    )
+    last = client.updates[-1]
+    assert last["text"] == "the answer"                 # fallback text preserved
+    assert DELETE_ACTION_ID in _action_ids(last["blocks"])
+    assert _button_value(last["blocks"]) == "U7"        # owner = asker
+
+
+async def test_process_lobby_ask_attaches_delete_button_with_asker_as_owner():
+    client = FakeClient()
+
+    class LobbyOrch:
+        async def handle_lobby_ask(self, *, text, thread_ts):
+            return CitedAnswer(text="routed", session_id="s1")
+
+    await process_lobby_ask(
+        text="q", channel="C0LOBBY", thread_ts="t1",
+        client=client, orchestrator=LobbyOrch(), user_id="U8",
+    )
+    last = client.updates[-1]
+    assert DELETE_ACTION_ID in _action_ids(last["blocks"])
+    assert _button_value(last["blocks"]) == "U8"
+
+
+async def test_process_ask_error_has_no_delete_button():
+    client = FakeClient()
+    orch = FakeOrch(exc=RuntimeError("boom"))
+    await process_ask(
+        text="q", channel="D1", thread_ts="t1", is_dm=True, client=client, orchestrator=orch
+    )
+    assert client.updates[-1]["text"] == ERROR_TEXT
+    assert _action_ids(client.updates[-1]["blocks"]) == []
+
+
+def test_delete_target_reads_both_payload_shapes():
+    assert _delete_target({"channel": {"id": "D1"}, "message": {"ts": "m1"}}) == ("D1", "m1")
+    assert _delete_target({"container": {"channel_id": "D2", "message_ts": "m2"}}) == ("D2", "m2")
+    assert _delete_target({}) == (None, None)
+
+
+def test_delete_owner_reads_button_value():
+    assert _delete_owner({"actions": [{"value": "U7"}]}) == "U7"
+    assert _delete_owner({"actions": [{"value": ""}]}) == ""
+    assert _delete_owner({}) == ""
+
+
+def _delete_handler(app):
+    return app.handlers[("action", DELETE_ACTION_ID)]
+
+
+async def _ack():
+    pass
+
+
+async def test_delete_handler_owner_can_delete():
+    app, client, orch = FakeApp(), FakeClient(), FakeOrch()
+    register_handlers(app, orch)
+    body = {"channel": {"id": "D1"}, "message": {"ts": "m9"},
+            "user": {"id": "U7"}, "actions": [{"value": "U7"}]}
+    await _delete_handler(app)(ack=_ack, body=body, client=client)
+    assert client.deleted == [{"channel": "D1", "ts": "m9"}]
+
+
+async def test_delete_handler_anyone_can_delete_when_no_owner():
+    app, client, orch = FakeApp(), FakeClient(), FakeOrch()
+    register_handlers(app, orch)
+    body = {"channel": {"id": "C1"}, "message": {"ts": "m9"},
+            "user": {"id": "Ustranger"}, "actions": [{"value": ""}]}
+    await _delete_handler(app)(ack=_ack, body=body, client=client)
+    assert client.deleted == [{"channel": "C1", "ts": "m9"}]
+
+
+async def test_delete_handler_non_owner_is_refused():
+    app, client, orch = FakeApp(), FakeClient(), FakeOrch()
+    register_handlers(app, orch)
+    body = {"channel": {"id": "C1"}, "message": {"ts": "m9"},
+            "user": {"id": "Ustranger"}, "actions": [{"value": "U7"}]}
+    await _delete_handler(app)(ack=_ack, body=body, client=client)
+    assert client.deleted == []                          # not deleted
+    assert client.ephemeral["user"] == "Ustranger"       # told why, privately
+    assert "asked" in client.ephemeral["text"].lower()
 
 
 async def test_babbla_command_acks_and_responds():
