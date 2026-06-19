@@ -1,6 +1,6 @@
 import pytest
 from babbla.config import DigestConfig, ProjectBinding
-from babbla.digest.anchors import Change, current_head, changes_between, changes_since
+from babbla.digest.anchors import Change, current_head, changes_between, changes_since, head_for
 
 
 def _binding(digest):
@@ -59,3 +59,17 @@ def test_changes_since_parses_window():
 def test_changes_between_empty_when_404():
     gj = _fake({})  # everything 404 -> None
     assert changes_between("o", "r", "base", "head", get_json=gj) == []
+
+
+def test_head_for_branch():
+    gj = _fake({"/repos/o/r/commits": [{"sha": "head1", "commit": {"message": "x"}}]})
+    assert head_for("o", "r", "branch", None, get_json=gj) == "head1"
+
+
+def test_head_for_deploy():
+    gj = _fake({"/repos/o/r/actions/workflows/cicd_prod.yml/runs": {"workflow_runs": [{"head_sha": "dep1"}]}})
+    assert head_for("o", "r", "deploy", "cicd_prod.yml", get_json=gj) == "dep1"
+
+
+def test_head_for_branch_none_when_empty():
+    assert head_for("o", "r", "branch", None, get_json=_fake({"/repos/o/r/commits": []})) is None
