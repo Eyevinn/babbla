@@ -18,8 +18,12 @@ def test_delete_button_blocks_renders_text_and_button():
 
 def test_delete_button_embeds_owner_as_value():
     assert _button(delete_button_blocks("x", owner_id="U123"))["value"] == "U123"
-    # No owner -> empty value means "anyone may delete"
-    assert _button(delete_button_blocks("x"))["value"] == ""
+    # No owner -> the value key is OMITTED, not set to "". Slack rejects an
+    # empty button value (invalid_blocks), and the handler reads an absent
+    # value as "" = "anyone may delete".
+    btn = _button(delete_button_blocks("x"))
+    assert "value" not in btn
+    assert (btn.get("value") or "") == ""  # handler's _delete_owner semantics
 
 
 def test_delete_button_has_confirm_dialog():

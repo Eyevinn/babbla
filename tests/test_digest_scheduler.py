@@ -39,7 +39,8 @@ def _action_ids(blocks):
 def _btn_value(blocks):
     for b in blocks or []:
         if b.get("type") == "actions":
-            return b["elements"][0]["value"]
+            # Absent value == "anyone may delete" (Slack rejects an empty value).
+            return b["elements"][0].get("value") or ""
     return None
 
 
