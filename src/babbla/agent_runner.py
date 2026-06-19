@@ -44,7 +44,8 @@ class AgentRunner:
         self._query = query_fn
 
     async def run_ask(
-        self, text: str, binding: ProjectBinding, resume_session_id: str | None
+        self, text: str, binding: ProjectBinding, resume_session_id: str | None,
+        *, system_prompt: str | None = None,
     ) -> CitedAnswer:
         cfg = build_agent_config(
             owner=binding.owner,
@@ -57,7 +58,7 @@ class AgentRunner:
         )
         options = ClaudeAgentOptions(
             model=cfg.model,
-            system_prompt=cfg.system_prompt,
+            system_prompt=system_prompt or cfg.system_prompt,
             allowed_tools=list(cfg.allowed_tools),
             permission_mode=cfg.permission_mode,
             mcp_servers=cfg.mcp_servers,

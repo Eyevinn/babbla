@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from babbla.config import ProjectBinding, Topic
 from babbla.digest.anchors import Change
+from babbla.read_only import DIGEST_SYSTEM_PROMPT
 
 NOTHING_RELEVANT = "NOTHING_RELEVANT"
 
@@ -41,27 +42,33 @@ class DigestRunner:
             f"Keep it short and Slack-friendly. Lead with the headline. If the changes are all "
             f"minor/chore, say so briefly rather than padding."
         )
-        answer = await self._agent.run_ask(prompt, binding, None)
+        answer = await self._agent.run_ask(prompt, binding, None, system_prompt=DIGEST_SYSTEM_PROMPT)
         if topic and answer.text.strip() == NOTHING_RELEVANT:
             return ""
         return answer.text
 
     async def summarize_shared(
         self, context_binding: ProjectBinding, per_project_changes: dict[str, list[Change]],
-        topic: Topic | None = None,
+        topic: Topic | None = None, slugs: dict[str, str] | None = None,
     ) -> str:
+        slugs = slugs or {}
         sections = "\n\n".join(
-            f"## {name}\n{_facts(changes)}" for name, changes in per_project_changes.items()
+            f"## {name} ({slugs[name]})\n{_facts(changes)}" if name in slugs
+            else f"## {name}\n{_facts(changes)}"
+            for name, changes in per_project_changes.items()
         )
         preamble = _topic_preamble(topic) if topic else ""
         prompt = preamble + (
             "Write ONE concise Slack digest of what shipped across several projects this period. "
             "Lead with a short cross-project headline, then a section per project. Summarize at a "
             "reader-friendly altitude, group related work, and CITE commits by SHA and PRs by number "
-            "as GitHub links. Keep it short and Slack-friendly.\n\n"
+            "as GitHub links (use the owner/repo in each section heading). Keep it short and "
+            "Slack-friendly.\n\n"
             f"{sections}"
         )
-        answer = await self._agent.run_ask(prompt, context_binding, None)
+        answer = await self._agent.run_ask(
+            prompt, context_binding, None, system_prompt=DIGEST_SYSTEM_PROMPT
+        )
         if topic and answer.text.strip() == NOTHING_RELEVANT:
             return ""
         return answer.text

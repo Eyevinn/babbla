@@ -100,8 +100,12 @@ class SharedDigestAction:
         if not per_project_changes:
             return  # all quiet: no post, no advance
         context_binding = self._by_name[next(iter(per_project_changes))]
+        slugs = {
+            n: f"{self._by_name[n].owner}/{self._by_name[n].repo}"
+            for n in per_project_changes if n in self._by_name
+        }
         text = await self._runner.summarize_shared(
-            context_binding, per_project_changes, topic=self._sub.digest.topic
+            context_binding, per_project_changes, topic=self._sub.digest.topic, slugs=slugs
         )
         if text.strip():
             await self._poster.post(sub.channel_id, text, blocks=delete_button_blocks(text))
@@ -165,7 +169,11 @@ class PersonalDigestAction:
         if not per_project_changes:
             return
         context_binding = self._by_name[next(iter(per_project_changes))]
-        text = await self._runner.summarize_shared(context_binding, per_project_changes)
+        slugs = {
+            n: f"{self._by_name[n].owner}/{self._by_name[n].repo}"
+            for n in per_project_changes if n in self._by_name
+        }
+        text = await self._runner.summarize_shared(context_binding, per_project_changes, slugs=slugs)
         dm_channel = await self._poster.open_dm(user_id)
         await self._poster.post(dm_channel, text, blocks=delete_button_blocks(text, owner_id=user_id))
         await self._state.advance(user_id, heads, now.timestamp())

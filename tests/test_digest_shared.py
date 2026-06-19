@@ -27,7 +27,7 @@ class FakeShared:
 
 class FakeRunner:
     def __init__(self): self.calls = []
-    async def summarize_shared(self, context_binding, per_project_changes, topic=None):
+    async def summarize_shared(self, context_binding, per_project_changes, topic=None, slugs=None):
         self.calls.append((context_binding.name, {k: [c.sha for c in v] for k, v in per_project_changes.items()}))
         return "shared-digest"
 
@@ -135,7 +135,7 @@ async def test_unknown_name_skipped_with_warning(monkeypatch, caplog):
 
 class EmptySharedRunner:
     def __init__(self): self.calls = []
-    async def summarize_shared(self, context_binding, per_project_changes, topic=None):
+    async def summarize_shared(self, context_binding, per_project_changes, topic=None, slugs=None):
         self.calls.append(topic.name if topic else None)
         return ""
 
