@@ -173,7 +173,10 @@ class PersonalDigestAction:
             n: f"{self._by_name[n].owner}/{self._by_name[n].repo}"
             for n in per_project_changes if n in self._by_name
         }
-        topics_by_project = await self._subs.topics_for(user_id)
+        all_topics = await self._subs.topics_for(user_id)
+        topics_by_project = {
+            n: all_topics[n] for n in per_project_changes if n in all_topics
+        }
         text = await self._runner.summarize_shared(
             context_binding, per_project_changes, slugs=slugs, topics_by_project=topics_by_project
         )
