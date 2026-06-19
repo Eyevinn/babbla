@@ -119,10 +119,13 @@ lobby channel / subscription / digest / quiz is set in `config/channels.yaml`).
   subscribed set (reusing the Shared-Subscription router; empty set falls back to the `dm:true` project),
   and a Personal Digest delivered by DM on a per-user cadence (daily/weekly/off). Public/internal only,
   enforced at subscribe-time, ask-time (`Surface.DM`), and digest-send-time. (`…/2026-06-19-personal-subscriptions-design.md`)
-- [ ] **Topics** — thematic slices within/across projects narrowing a subscription. Deferred (fuzziest;
-  revisit when a real need appears).
+- [x] **Topics** — thematic slices narrowing a digest. A `Topic` (name + description) attaches to a
+  per-project or shared digest; the summarizer covers only matching changes (LLM-scoped) and stays
+  silent when none match this period (watermark still advances). Back-compatible / inert without a
+  `topic:` block. Ask-scoped topics, personal-digest topics, and deterministic label/path matching
+  deferred. (`…/2026-06-19-topics-design.md`)
 
-Also deferred from the scheduled-actions slice: per-Topic digest scoping, quiz scoring/per-user state,
+Also deferred from the scheduled-actions slice: quiz scoring/per-user state,
 more action types (ADR-of-the-week, stale-PR nudge), summary customisation (per-digest `audience`
 field), and a skill-based-summary spike (needs a headless-SDK skill-loading investigation).
 
