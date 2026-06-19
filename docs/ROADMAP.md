@@ -99,10 +99,31 @@ cycle when reached.
 
 ### Phase 4 — Lobby + Subscriptions / Visibility (new feature subsystem)
 
-- [ ] The open discovery surface (Lobby), Shared/Personal Subscriptions, and Visibility tiers
-  from the proposal's surface model. The largest item; gets its own spec→plan cycle when
-  reached. (Note: repo-as-source-of-truth already collapses *memory* visibility into repo
-  access; this phase is about *surface* discovery and subscription, not a memory auth system.)
+The open discovery surface (Lobby), Shared/Personal Subscriptions, and Visibility tiers from the
+proposal's surface model. Decomposed into independent slices, each with its own spec→plan→build cycle
+under `docs/superpowers/`. All slices below are **built and merged to local `main` but NOT yet pushed
+to origin**, and are **inert until configured** (no behavior change to the live MyTV pilot until a
+lobby channel / subscription / digest / quiz is set in `config/channels.yaml`).
+
+- [x] **Visibility enforcement** — `authorize_ask(binding, surface)` pre-flight gate; surface-based
+  points-don't-reveal for `private` projects. (`docs/superpowers/specs/2026-06-18-visibility-enforcement-design.md`)
+- [x] **Lobby** — open discovery surface; LLM classifier routes a free-text ask to a project, answers
+  public/internal, points-don't-reveal for private; sticky per-thread routing. (`…/2026-06-18-lobby-design.md`)
+- [x] **Shared Subscriptions** — a Channel follows a *set* of projects (portfolio channel); Channel
+  asks route among the subscribed set, reusing the Lobby router. (`…/2026-06-19-shared-subscriptions-design.md`)
+- [x] **Scheduled Actions framework** — generalized the digest scheduler into `ActionScheduler` +
+  `Action`; three actions: per-project digest (refactored), shared/portfolio digest fan-out, and a
+  minimal read-only weekly quiz. (`…/2026-06-19-scheduled-actions-design.md`)
+- [ ] **Personal Subscriptions** — NEXT (brainstorm started, no spec yet): per-user persisted
+  interests (Babbla's first per-user write store) + a Personal Digest delivered by DM. Likely also a
+  personal-scoped DM ask. Note: personal subscriptions should be restricted to public/internal
+  projects (a private project's content must not reach a DM — reuse the visibility gate).
+- [ ] **Topics** — thematic slices within/across projects narrowing a subscription. Deferred (fuzziest;
+  revisit when a real need appears).
+
+Also deferred from the scheduled-actions slice: per-Topic digest scoping, quiz scoring/per-user state,
+more action types (ADR-of-the-week, stale-PR nudge), summary customisation (per-digest `audience`
+field), and a skill-based-summary spike (needs a headless-SDK skill-loading investigation).
 
 ## Open questions
 
