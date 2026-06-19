@@ -97,3 +97,27 @@ class SharedDigestAction:
         text = await self._runner.summarize_shared(context_binding, per_project_changes)
         await self._poster.post(sub.channel_id, text)
         await self._store.advance(sub.channel_id, heads, now.timestamp())
+
+
+class QuizAction:
+    def __init__(self, binding, timer, runner, poster, cadence: str, tz: str, count: int) -> None:
+        self._b = binding
+        self._timer = timer
+        self._runner = runner
+        self._poster = poster
+        self._cadence = cadence
+        self._tz = tz
+        self._count = count
+        self._key = f"quiz:{binding.name}"
+        self.label = self._key
+
+    async def maybe_run(self, now: datetime) -> None:
+        last = await self._timer.get(self._key)
+        if not is_due(now, last, self._cadence, self._tz):
+            return
+        text = await self._runner.generate(self._b, self._count)
+        questions, _, answers = text.partition("===ANSWERS===")
+        ts = await self._poster.post(self._b.channel_id, questions.strip())
+        if answers.strip():
+            await self._poster.post(self._b.channel_id, answers.strip(), thread_ts=ts)
+        await self._timer.advance(self._key, now.timestamp())
