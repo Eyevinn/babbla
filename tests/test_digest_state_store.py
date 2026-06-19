@@ -62,3 +62,28 @@ async def test_shared_channels_independent(shared):
     await shared.advance("C901", {"Other": "z1"}, 20.0)
     assert (await shared.get("C900")).watermarks == {"MyTV": "h1"}
     assert (await shared.get("C901")).watermarks == {"Other": "z1"}
+
+
+from babbla.session_store import ActionTimerStore
+
+
+@pytest.fixture
+def timer(tmp_path):
+    s = ActionTimerStore(str(tmp_path / "timer.db"))
+    yield s
+    s.close()
+
+
+async def test_timer_unknown_key_is_none(timer):
+    assert await timer.get("quiz:MyTV") is None
+
+
+async def test_timer_advance_roundtrips(timer):
+    await timer.advance("quiz:MyTV", 1234.0)
+    assert await timer.get("quiz:MyTV") == 1234.0
+
+
+async def test_timer_advance_is_upsert(timer):
+    await timer.advance("quiz:MyTV", 1.0)
+    await timer.advance("quiz:MyTV", 2.0)
+    assert await timer.get("quiz:MyTV") == 2.0

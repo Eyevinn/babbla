@@ -220,3 +220,41 @@ class SharedDigestStateStore:
 
     def close(self) -> None:
         self._conn.close()
+
+
+_ACTION_TIMER_SCHEMA = """
+CREATE TABLE IF NOT EXISTS action_timer (
+    action_key    TEXT PRIMARY KEY,
+    last_fired_at REAL NOT NULL
+)
+"""
+
+
+class ActionTimerStore:
+    def __init__(self, db_path: str) -> None:
+        self._conn = sqlite3.connect(db_path, check_same_thread=False)
+        self._conn.execute(_ACTION_TIMER_SCHEMA)
+        self._conn.commit()
+
+    async def get(self, action_key: str) -> float | None:
+        return await asyncio.to_thread(self._get_sync, action_key)
+
+    def _get_sync(self, action_key: str) -> float | None:
+        row = self._conn.execute(
+            "SELECT last_fired_at FROM action_timer WHERE action_key = ?", (action_key,)
+        ).fetchone()
+        return row[0] if row else None
+
+    async def advance(self, action_key: str, last_fired_at: float) -> None:
+        await asyncio.to_thread(self._advance_sync, action_key, last_fired_at)
+
+    def _advance_sync(self, action_key: str, last_fired_at: float) -> None:
+        self._conn.execute(
+            "INSERT INTO action_timer (action_key, last_fired_at) VALUES (?, ?) "
+            "ON CONFLICT(action_key) DO UPDATE SET last_fired_at = excluded.last_fired_at",
+            (action_key, last_fired_at),
+        )
+        self._conn.commit()
+
+    def close(self) -> None:
+        self._conn.close()
