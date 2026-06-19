@@ -14,6 +14,7 @@ def test_parse_subscribe_and_unsubscribe():
 
 def test_parse_subscribe_without_arg_is_help():
     assert personal.parse_command("subscribe") == Command("help")
+    assert personal.parse_command("unsubscribe") == Command("help")
 
 
 def test_parse_list_aliases():
