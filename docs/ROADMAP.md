@@ -114,10 +114,11 @@ lobby channel / subscription / digest / quiz is set in `config/channels.yaml`).
 - [x] **Scheduled Actions framework** — generalized the digest scheduler into `ActionScheduler` +
   `Action`; three actions: per-project digest (refactored), shared/portfolio digest fan-out, and a
   minimal read-only weekly quiz. (`…/2026-06-19-scheduled-actions-design.md`)
-- [ ] **Personal Subscriptions** — NEXT (brainstorm started, no spec yet): per-user persisted
-  interests (Babbla's first per-user write store) + a Personal Digest delivered by DM. Likely also a
-  personal-scoped DM ask. Note: personal subscriptions should be restricted to public/internal
-  projects (a private project's content must not reach a DM — reuse the visibility gate).
+- [x] **Personal Subscriptions** — per-user persisted interests (Babbla's first per-user write store)
+  via a `/babbla` slash command (subscribe/unsubscribe/list/digest), personal DM-ask routing among the
+  subscribed set (reusing the Shared-Subscription router; empty set falls back to the `dm:true` project),
+  and a Personal Digest delivered by DM on a per-user cadence (daily/weekly/off). Public/internal only,
+  enforced at subscribe-time, ask-time (`Surface.DM`), and digest-send-time. (`…/2026-06-19-personal-subscriptions-design.md`)
 - [ ] **Topics** — thematic slices within/across projects narrowing a subscription. Deferred (fuzziest;
   revisit when a real need appears).
 
