@@ -27,3 +27,16 @@ projects:
 # subscriptions:
 #   - channel_id: C0PORTFOLIO   # the portfolio channel's Slack id
 #     projects: [MyTV]          # names from `projects:` above; >= 1, all must exist
+# Scheduled actions (optional). Beyond a project's own `digest:` above, you can:
+#  - give a SUBSCRIPTION an aggregated digest covering all its projects:
+#      subscriptions:
+#        - channel_id: C0PORTFOLIO
+#          projects: [MyTV]
+#          digest:
+#            cadence: weekly       # daily | weekly
+#            tz: Europe/Stockholm
+#  - give a PROJECT a weekly read-only quiz posted to its channel (answers in a thread):
+#      quiz:
+#        cadence: weekly           # daily | weekly
+#        tz: Europe/Stockholm
+#        count: 3                  # number of questions (default 3)
