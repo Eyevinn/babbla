@@ -4,7 +4,7 @@ import asyncio
 
 from babbla.access import Surface, authorize_ask
 from babbla.agent_runner import CitedAnswer
-from babbla import lobby
+from babbla import lobby, subscriptions
 from babbla.config import Config, ProjectBinding
 
 
@@ -49,6 +49,12 @@ class Orchestrator:
     async def handle_ask(
         self, *, text: str, thread_ts: str, channel_id: str, is_dm: bool
     ) -> CitedAnswer:
+        if not is_dm:
+            sub = self._config.subscription_for(channel_id)
+            if sub is not None:
+                return await self._handle_subscription_ask(
+                    text=text, thread_ts=thread_ts, sub=sub
+                )
         binding = self._resolve(channel_id, is_dm)
         surface = Surface.DM if is_dm else Surface.CHANNEL
         decision = authorize_ask(binding, surface)
@@ -64,6 +70,38 @@ class Orchestrator:
             return answer
         finally:
             self._release_lock(thread_ts)
+
+    async def _resolve_subscription(self, text: str, thread_ts: str, entries):
+        if len(entries) == 1:
+            return entries[0]                       # deterministic: no classifier call
+        sticky = await self._lobby_store.get(thread_ts)
+        if sticky is not None:
+            for entry in entries:
+                if entry.binding.name == sticky:
+                    return entry
+            # sticky project no longer in this subscription → re-route
+        return await lobby.route(text, entries, self._classify_fn)
+
+    async def _handle_subscription_ask(self, *, text: str, thread_ts: str, sub) -> CitedAnswer:
+        entries = subscriptions.entries_for(self._catalog, sub.project_names)
+        async with self._lock_for(thread_ts):
+            try:
+                entry = await self._resolve_subscription(text, thread_ts, entries)
+                if entry is None:
+                    return CitedAnswer(
+                        text=subscriptions.subscription_clarify(entries), session_id=None
+                    )
+                decision = authorize_ask(entry.binding, Surface.CHANNEL)  # channel = access
+                if not decision.allowed:
+                    return CitedAnswer(text=decision.pointer, session_id=None)
+                await self._lobby_store.put(thread_ts, entry.binding.name)
+                resume = await self._store.get_session(thread_ts)
+                answer = await self._runner.run_ask(text, entry.binding, resume)
+                if answer.session_id:
+                    await self._store.put_session(thread_ts, answer.session_id)
+                return answer       # no pointer suffix — the asker is already home
+            finally:
+                self._release_lock(thread_ts)
 
     async def _resolve_lobby(self, text: str, thread_ts: str):
         sticky = await self._lobby_store.get(thread_ts)
