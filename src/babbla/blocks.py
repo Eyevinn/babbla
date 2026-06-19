@@ -37,15 +37,21 @@ def delete_button_blocks(text: str, owner_id: str = "") -> list[dict]:
         {"type": "section", "text": {"type": "mrkdwn", "text": chunk}}
         for chunk in _chunk(text)
     ]
+    button: dict = {
+        "type": "button",
+        "text": {"type": "plain_text", "text": "🗑 Delete", "emoji": True},
+        "action_id": DELETE_ACTION_ID,
+    }
+    # Slack rejects an empty button value (invalid_blocks). Only carry a value
+    # when there's an owner; an absent value reads as "anyone may delete".
+    if owner_id:
+        button["value"] = owner_id
     blocks.append(
         {
             "type": "actions",
             "elements": [
                 {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": "🗑 Delete", "emoji": True},
-                    "action_id": DELETE_ACTION_ID,
-                    "value": owner_id or "",
+                    **button,
                     "confirm": {
                         "title": {"type": "plain_text", "text": "Delete this message?"},
                         "text": {

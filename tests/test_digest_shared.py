@@ -71,7 +71,8 @@ async def test_first_run_bootstrap_posts_and_advances_all(monkeypatch):
     from babbla.blocks import DELETE_ACTION_ID
     btn = next(b["elements"][0] for b in poster.blocks[-1] if b.get("type") == "actions")
     assert btn["action_id"] == DELETE_ACTION_ID
-    assert btn["value"] == ""   # shared channel digest: anyone may delete
+    # Anyone may delete: the value key is omitted (Slack rejects an empty value).
+    assert "value" not in btn
 
 
 async def test_all_quiet_no_post_no_advance(monkeypatch):
