@@ -33,9 +33,16 @@ class ProjectBinding:
 
 
 @dataclass(frozen=True)
+class SubscriptionDigest:
+    cadence: str
+    tz: str
+
+
+@dataclass(frozen=True)
 class Subscription:
     channel_id: str
     project_names: tuple[str, ...]
+    digest: SubscriptionDigest | None = None
 
 
 @dataclass(frozen=True)
@@ -65,6 +72,27 @@ class Config:
     def digest_bindings(self) -> tuple[ProjectBinding, ...]:
         return tuple(b for b in self.bindings if b.digest is not None and b.channel_id)
 
+    def digest_subscriptions(self) -> tuple[Subscription, ...]:
+        return tuple(s for s in self.subscriptions if s.digest is not None)
+
+
+def _parse_cadence_tz(label: str, raw: dict | None, kind: str):
+    """Shared cadence+tz parse for subscription digest / quiz. Returns (cadence, tz) or None."""
+    if not raw:
+        return None
+    raw_cadence = raw.get("cadence", "off")
+    if raw_cadence is False or str(raw_cadence).strip().lower() == "off":
+        return None
+    cadence = str(raw_cadence)
+    if cadence not in _CADENCES:
+        raise ValueError(f"{label}: {kind}.cadence must be one of off|daily|weekly, got {cadence!r}")
+    tz = str(raw.get("tz", "UTC"))
+    try:
+        ZoneInfo(tz)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise ValueError(f"{label}: {kind}.tz is not a valid time zone: {tz!r}") from exc
+    return cadence, tz
+
 
 def _parse_subscriptions(raw_subs, known_names: set[str]) -> tuple[Subscription, ...]:
     subscriptions: list[Subscription] = []
@@ -88,7 +116,11 @@ def _parse_subscriptions(raw_subs, known_names: set[str]) -> tuple[Subscription,
                 f"channels.yaml: channel_id {channel_id} appears in more than one subscription"
             )
         seen_channels.add(channel_id)
-        subscriptions.append(Subscription(channel_id=channel_id, project_names=names))
+        ct = _parse_cadence_tz(f"subscription {channel_id}", raw_sub.get("digest"), "digest")
+        digest = SubscriptionDigest(cadence=ct[0], tz=ct[1]) if ct else None
+        subscriptions.append(
+            Subscription(channel_id=channel_id, project_names=names, digest=digest)
+        )
     return tuple(subscriptions)
 
 
