@@ -11,14 +11,18 @@ from slack_sdk.web.async_client import AsyncWebClient  # noqa: F401  (type only;
 
 from babbla.agent_runner import AgentRunner, Secrets
 from babbla.config import load_config
+from babbla.digest.actions import PerProjectDigestAction, QuizAction, SharedDigestAction
 from babbla.digest.anchors import make_get_json
 from babbla.digest.poster import SlackPoster
+from babbla.digest.quiz import QuizRunner
 from babbla.digest.runner import DigestRunner
-from babbla.digest.scheduler import DigestScheduler
+from babbla.digest.scheduler import ActionScheduler
 from babbla.lobby import build_catalog, make_classify_fn
 from babbla.orchestrator import Orchestrator
 from babbla.read_only import DEFAULT_MODEL
-from babbla.session_store import DigestStateStore, LobbyThreadStore, SessionStore
+from babbla.session_store import (
+    ActionTimerStore, DigestStateStore, LobbyThreadStore, SessionStore, SharedDigestStateStore,
+)
 from babbla.slack_adapter import register_handlers
 
 logger = logging.getLogger(__name__)
@@ -62,15 +66,23 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def build_scheduler(*, config, secrets: Secrets, db_path: str, client) -> DigestScheduler:
-    return DigestScheduler(
-        config=config,
-        store=DigestStateStore(db_path),
-        runner=DigestRunner(AgentRunner(secrets)),
-        poster=SlackPoster(client),
-        get_json=make_get_json(secrets.github_token),
-        now_fn=_utcnow,
-    )
+def build_scheduler(*, config, secrets: Secrets, db_path: str, client) -> ActionScheduler:
+    get_json = make_get_json(secrets.github_token)
+    poster = SlackPoster(client)
+    digest_runner = DigestRunner(AgentRunner(secrets))
+    quiz_runner = QuizRunner(AgentRunner(secrets))
+    digest_store = DigestStateStore(db_path)
+    shared_store = SharedDigestStateStore(db_path)
+    timer_store = ActionTimerStore(db_path)
+    by_name = {b.name: b for b in config.bindings}
+    actions = []
+    for b in config.digest_bindings():
+        actions.append(PerProjectDigestAction(b, digest_store, get_json, digest_runner, poster))
+    for s in config.digest_subscriptions():
+        actions.append(SharedDigestAction(s, by_name, shared_store, get_json, digest_runner, poster))
+    for b in config.quiz_bindings():
+        actions.append(QuizAction(b, timer_store, quiz_runner, poster, b.quiz.cadence, b.quiz.tz, b.quiz.count))
+    return ActionScheduler(actions=tuple(actions), now_fn=_utcnow)
 
 
 async def main() -> None:
