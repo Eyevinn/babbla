@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 import babbla.digest.actions as A
-from babbla.config import DigestConfig, ProjectBinding
+from babbla.config import DigestConfig, ProjectBinding, Topic
 from babbla.digest.actions import PerProjectDigestAction
 from babbla.session_store import DigestState
 from babbla.digest.anchors import Change
@@ -20,7 +20,7 @@ class FakeStore:
 
 class FakeRunner:
     def __init__(self): self.calls = []
-    async def summarize(self, binding, changes, head_sha):
+    async def summarize(self, binding, changes, head_sha, topic=None):
         self.calls.append((binding.name, [c.sha for c in changes], head_sha))
         return f"digest:{head_sha}"
 
@@ -95,3 +95,26 @@ async def test_no_ship_signal_skips(monkeypatch):
         _binding(), DigestState(None, None), head=None, changes=[], monkeypatch=monkeypatch)
     await action.maybe_run(NOW)
     assert store.advanced == [] and poster.posts == []
+
+
+class EmptyRunner:
+    def __init__(self): self.calls = []
+    async def summarize(self, binding, changes, head_sha, topic=None):
+        self.calls.append((binding.name, topic.name if topic else None))
+        return ""   # runner normalized NOTHING_RELEVANT to empty
+
+
+async def test_topic_empty_advances_but_does_not_post(monkeypatch):
+    binding = ProjectBinding(
+        "MyTV", "o", "r", "public", "C0XXXXXXXXX", False,
+        DigestConfig("weekly", "UTC", "branch", None, Topic("security", "auth")),
+    )
+    store, runner, poster = FakeStore(DigestState(None, None)), EmptyRunner(), FakePoster()
+    monkeypatch.setattr(A, "current_head", lambda b, *, get_json: "H")
+    monkeypatch.setattr(A, "changes_between", lambda o, r, base, hd, *, get_json: [Change("c", "x", None)])
+    monkeypatch.setattr(A, "changes_since", lambda o, r, since, *, get_json: [Change("c", "x", None)])
+    action = PerProjectDigestAction(binding, store, lambda path: None, runner, poster)
+    await action.maybe_run(NOW)
+    assert runner.calls == [("MyTV", "security")]            # topic threaded through
+    assert poster.posts == []                                # silent: empty summary
+    assert store.advanced == [("C0XXXXXXXXX", "H", NOW.timestamp())]   # but watermark advanced
