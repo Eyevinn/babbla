@@ -11,7 +11,7 @@ projects:
     visibility: public
     # Slack channel id for the Shared Ask surface. Fill in once the channel exists;
     # null means "no channel binding yet" (DM still works via dm: true).
-    channel_id: null  # set to your Slack channel id
+    channel_id: C0BBK6SJTND
     # Answer DMs (Private Ask) about this project. Exactly one project may set dm: true in the pilot.
     dm: true
     # Phase 3 digest: a weekly "what shipped" summary of new commits on the default branch,
