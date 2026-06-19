@@ -276,3 +276,11 @@ Using a fake scheduler wiring (fake `get_json`, fake `SharedDigestStateStore` or
 - **Personal / DM digests** — an individual's Personal Digest delivered privately.
 - **Unifying the engines** — collapsing the per-project and shared digest paths into one; kept separate
   deliberately so this slice does not disturb the proven per-project path.
+- **Summary customisation** — an optional per-digest `audience` / instructions free-text field appended
+  to the base prompt (per-channel tone/altitude), keeping the non-negotiable parts (cite SHAs/PRs,
+  group, headline). Small, config-driven, version-controlled; deferred to keep this slice focused on
+  fan-out + state.
+- **Skill-based summary** — replacing the inline summarisation prompt with a versioned read-only
+  "digest-writing skill" loaded by the agent. Read-only-by-construction is unaffected (skills are
+  instructions, not capabilities), but it first needs a spike to confirm the **headless** Agent SDK
+  path loads skills the way the interactive agent does. Its own future slice.
