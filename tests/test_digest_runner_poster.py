@@ -42,3 +42,19 @@ async def test_poster_posts_top_level_message():
     client = FakeClient()
     await SlackPoster(client).post("C0XXXXXXXXX", "hello")
     assert client.kwargs == {"channel": "C0XXXXXXXXX", "text": "hello"}
+
+
+async def test_summarize_shared_groups_by_project():
+    agent = FakeAgent()
+    out = await DigestRunner(agent).summarize_shared(
+        _binding(),
+        {
+            "MyTV": [Change("abc1234", "feat: playback (#7)", 7)],
+            "Stream": [Change("def5678", "fix: retry", None)],
+        },
+    )
+    assert out == "SUMMARY"
+    p = agent.prompt
+    assert "MyTV" in p and "Stream" in p
+    assert "abc1234" in p and "feat: playback (#7)" in p
+    assert "def5678" in p and "fix: retry" in p
