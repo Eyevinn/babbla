@@ -66,7 +66,10 @@ class Orchestrator:
         if cmd.verb == "subscribe":
             binding = next((b for b in self._config.bindings if b.name == cmd.arg), None)
             if binding is None:
-                return personal.render_unknown_project([b.name for b in self._config.bindings])
+                # Advertise only open-tier projects — never name a private one.
+                return personal.render_unknown_project(
+                    [b.name for b in self._config.bindings if is_open_tier(b)]
+                )
             if not is_open_tier(binding):
                 return personal.render_private_refused(binding.name)
             await self._personal_store.add(user_id, binding.name)

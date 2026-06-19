@@ -20,7 +20,7 @@ def parse_command(text: str) -> Command:
     if verb in ("subscribe", "unsubscribe"):
         if len(tokens) < 2:
             return Command("help")
-        return Command(verb, tokens[1])
+        return Command(verb, " ".join(tokens[1:]))  # project names may be multi-word
     if verb in ("list", "subscriptions"):
         return Command("list")
     if verb == "digest":

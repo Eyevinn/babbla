@@ -380,6 +380,13 @@ async def test_handle_command_subscribe_unknown_writes_nothing(store, psub):
     assert await psub.list_for("U1") == ()
 
 
+async def test_handle_command_subscribe_unknown_does_not_leak_private_names(store, psub):
+    orch = Orchestrator(_config_two(), FakeRunner(), store, personal_store=psub)
+    reply = await orch.handle_command("U1", "subscribe Ghost")
+    assert "MyTV" in reply          # public project advertised
+    assert "Secret" not in reply    # private project never named
+
+
 async def test_handle_command_subscribe_private_refused(store, psub):
     orch = Orchestrator(_config_two(), FakeRunner(), store, personal_store=psub)
     reply = await orch.handle_command("U1", "subscribe Secret")
