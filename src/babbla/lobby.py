@@ -38,15 +38,29 @@ def build_catalog(
     return tuple(entries)
 
 
+def _normalize_line(line: str) -> str:
+    """Strip whitespace, surrounding markdown emphasis, and trailing punctuation."""
+    line = line.strip().strip("*_`").strip()
+    return line.rstrip(".!:").strip()
+
+
 async def route(
     text: str,
     catalog: Sequence[CatalogEntry],
     classify_fn: Callable[[str, Sequence[CatalogEntry]], Awaitable[str]],
 ) -> CatalogEntry | None:
-    """Ask the classifier for a project, map its reply to an entry by EXACT name."""
-    reply = (await classify_fn(text, catalog) or "").strip()
-    for entry in catalog:
-        if entry.binding.name == reply:
+    """Ask the classifier for a project, map its reply to an entry by name.
+
+    Chatty models (Opus 4.8) reason first, then state the bare name on its own
+    final line. So scan lines bottom-up — the conclusion is at the end — and
+    return the first line that exactly matches a project name. A name embedded
+    mid-sentence does NOT match (stays conservative); 'NONE' matches nothing.
+    """
+    reply = await classify_fn(text, catalog) or ""
+    names = {entry.binding.name: entry for entry in catalog}
+    for line in reversed(reply.splitlines()):
+        entry = names.get(_normalize_line(line))
+        if entry is not None:
             return entry
     return None  # "NONE", prose, or any unrecognised reply
 
@@ -63,8 +77,16 @@ def make_classify_fn(query_fn, model: str):
             "best-matching project from the list, or the word NONE if none clearly fits. "
             "Reply with ONLY the name or NONE — no other text.\n\nProjects:\n" + listing
         )
+        # A pure label-emitter: no tools, no MCP servers, and no filesystem
+        # settings (CLAUDE.md / project settings / agentmemory wiring). Without
+        # setting_sources=[] the SDK loads project context and the classifier
+        # starts answering like a full assistant — emitting prose, not a name.
         options = ClaudeAgentOptions(
-            model=model, system_prompt=system_prompt, allowed_tools=[]
+            model=model,
+            system_prompt=system_prompt,
+            allowed_tools=[],
+            mcp_servers={},
+            setting_sources=[],
         )
         reply = ""
         async for message in query_fn(prompt=text, options=options):
