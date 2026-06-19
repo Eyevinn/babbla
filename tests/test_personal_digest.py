@@ -59,7 +59,7 @@ async def test_no_subscribers_is_noop(tmp_path):
     subs, state = await _store_pair(tmp_path)
     poster = FakePoster()
     action = PersonalDigestAction(subs, state, BY_NAME,
-                                  _get_json_with_commits("sha1", []), FakeRunner(), poster,
+                                  _get_json_with_commits("sha1", [{"sha": "sha1"}]), FakeRunner(), poster,
                                   "weekly", "UTC")
     await action.maybe_run(NOW)
     assert poster.posts == []
