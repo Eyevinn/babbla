@@ -20,3 +20,10 @@ projects:
       cadence: weekly
       tz: Europe/Stockholm
       anchor: branch
+# Shared Subscriptions: let ONE channel follow a SET of projects (a "portfolio"
+# channel). A question there is routed to the right project; today's 1:1
+# single-project channels (channel_id on a project above) keep working unchanged.
+# Omit this block entirely for the 1:1 default. Example:
+# subscriptions:
+#   - channel_id: C0PORTFOLIO   # the portfolio channel's Slack id
+#     projects: [MyTV]          # names from `projects:` above; >= 1, all must exist

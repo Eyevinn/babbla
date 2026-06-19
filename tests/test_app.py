@@ -79,3 +79,26 @@ def test_build_orchestrator_with_lobby_builds_catalog(tmp_path):
     assert orch._catalog[0].description == "desc"
     assert orch._lobby_store is not None
     assert orch._classify_fn is not None
+
+
+def test_build_orchestrator_with_subscriptions_builds_catalog(tmp_path):
+    cfg = tmp_path / "channels.yaml"
+    cfg.write_text(
+        "projects:\n  - name: MyTV\n    owner: Wkkkkk\n    repo: MyTV\n"
+        "    visibility: public\n    channel_id: C123\n    dm: true\n"
+        "subscriptions:\n  - channel_id: C900\n    projects: [MyTV]\n"
+    )
+    calls = []
+
+    def fake_get_json(path):
+        calls.append(path)
+        return {"description": "desc"}
+
+    orch = build_orchestrator(
+        config_path=str(cfg), db_path=str(tmp_path / "s.db"),
+        secrets=load_secrets(ENV), get_json=fake_get_json,
+    )
+    assert calls == ["/repos/Wkkkkk/MyTV"]            # catalog built even without a lobby
+    assert len(orch._catalog) == 1
+    assert orch._lobby_store is not None
+    assert orch._classify_fn is not None

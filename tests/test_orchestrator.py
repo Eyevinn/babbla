@@ -234,3 +234,108 @@ async def test_lobby_sticky_project_now_private_is_denied(store, tmp_path):
     assert "<#C777>" in ans.text                        # re-authorized -> points-don't-reveal
     assert runner.calls == []
     lobby_store.close()
+
+
+from babbla.config import Subscription
+
+
+def _sub_orch(bindings, subs, runner, store, classify, lobby_store):
+    return Orchestrator(
+        Config(bindings=bindings, subscriptions=subs),
+        runner,
+        store,
+        catalog=CATALOG,
+        classify_fn=classify,
+        lobby_store=lobby_store,
+    )
+
+
+SUBS_TWO = (Subscription("C900", ("MyTV", "Secret")),)
+
+
+async def test_subscription_routes_runs_and_persists_no_suffix(store, tmp_path):
+    runner = FakeRunner()
+    lobby_store = LobbyThreadStore(str(tmp_path / "l.db"))
+    orch = _sub_orch((PUB, PRIV), SUBS_TWO, runner, store, _classify_returning("MyTV"), lobby_store)
+    ans = await orch.handle_ask(text="how does playback work?", thread_ts="ts", channel_id="C900", is_dm=False)
+    assert ans.text == "answer to how does playback work?"   # NO pointer suffix
+    assert "↪" not in ans.text
+    assert runner.calls[0][1].name == "MyTV"
+    assert await lobby_store.get("ts") == "MyTV"              # sticky persisted
+    assert await store.get_session("ts") == "sess-1"          # session persisted
+    lobby_store.close()
+
+
+async def test_subscription_sticky_skips_routing(store, tmp_path):
+    runner = FakeRunner()
+    lobby_store = LobbyThreadStore(str(tmp_path / "l.db"))
+    await lobby_store.put("ts", "MyTV")
+    recorder = []
+    orch = _sub_orch((PUB, PRIV), SUBS_TWO, runner, store, _classify_returning("Secret", recorder=recorder), lobby_store)
+    await orch.handle_ask(text="follow up", thread_ts="ts", channel_id="C900", is_dm=False)
+    assert recorder == []                                     # classifier NOT called on sticky hit
+    assert runner.calls[0][1].name == "MyTV"
+    lobby_store.close()
+
+
+async def test_subscription_no_match_clarifies(store, tmp_path):
+    runner = FakeRunner()
+    lobby_store = LobbyThreadStore(str(tmp_path / "l.db"))
+    orch = _sub_orch((PUB, PRIV), SUBS_TWO, runner, store, _classify_returning("NONE"), lobby_store)
+    ans = await orch.handle_ask(text="ambiguous", thread_ts="ts", channel_id="C900", is_dm=False)
+    assert "MyTV" in ans.text and "Secret" in ans.text       # lists subscribed projects
+    assert runner.calls == []                                 # no agent run
+    assert await lobby_store.get("ts") is None                # nothing persisted
+    assert await store.get_session("ts") is None
+    lobby_store.close()
+
+
+async def test_subscription_size_one_skips_classifier(store, tmp_path):
+    runner = FakeRunner()
+    lobby_store = LobbyThreadStore(str(tmp_path / "l.db"))
+    recorder = []
+    subs = (Subscription("C901", ("MyTV",)),)
+    orch = _sub_orch((PUB, PRIV), subs, runner, store, _classify_returning("NONE", recorder=recorder), lobby_store)
+    ans = await orch.handle_ask(text="anything", thread_ts="ts", channel_id="C901", is_dm=False)
+    assert recorder == []                                     # no classifier call for size-1
+    assert runner.calls[0][1].name == "MyTV"
+    assert ans.text == "answer to anything"
+    lobby_store.close()
+
+
+async def test_subscription_private_project_is_answered(store, tmp_path):
+    runner = FakeRunner()
+    lobby_store = LobbyThreadStore(str(tmp_path / "l.db"))
+    orch = _sub_orch((PUB, PRIV), SUBS_TWO, runner, store, _classify_returning("Secret"), lobby_store)
+    ans = await orch.handle_ask(text="how does Secret work?", thread_ts="ts", channel_id="C900", is_dm=False)
+    assert ans.text == "answer to how does Secret work?"     # channel = access
+    assert runner.calls[0][1].name == "Secret"
+    lobby_store.close()
+
+
+async def test_non_subscription_channel_unchanged(store, tmp_path):
+    # A channel NOT in subscriptions takes the existing single-project path; router untouched.
+    runner = FakeRunner()
+    lobby_store = LobbyThreadStore(str(tmp_path / "l.db"))
+    recorder = []
+    single = ProjectBinding("MyTV", "Wkkkkk", "MyTV", "public", "C123", False)
+    orch = _sub_orch((single,), SUBS_TWO, runner, store, _classify_returning("MyTV", recorder=recorder), lobby_store)
+    ans = await orch.handle_ask(text="q", thread_ts="ts", channel_id="C123", is_dm=False)
+    assert ans.text == "answer to q"
+    assert recorder == []                                     # subscription router not engaged
+    assert runner.calls[0][1].name == "MyTV"
+    lobby_store.close()
+
+
+async def test_subscription_stale_sticky_reroutes(store, tmp_path):
+    # Sticky names a project no longer in this subscription -> must re-route.
+    runner = FakeRunner()
+    lobby_store = LobbyThreadStore(str(tmp_path / "l.db"))
+    await lobby_store.put("ts", "Gone")            # not in SUBS_TWO's (MyTV, Secret)
+    recorder = []
+    orch = _sub_orch((PUB, PRIV), SUBS_TWO, runner, store, _classify_returning("MyTV", recorder=recorder), lobby_store)
+    await orch.handle_ask(text="q", thread_ts="ts", channel_id="C900", is_dm=False)
+    assert recorder != []                           # classifier WAS called (re-routed)
+    assert runner.calls[0][1].name == "MyTV"        # routed to classifier's choice
+    assert await lobby_store.get("ts") == "MyTV"    # sticky updated to the new project
+    lobby_store.close()

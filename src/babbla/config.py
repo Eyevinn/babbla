@@ -33,9 +33,16 @@ class ProjectBinding:
 
 
 @dataclass(frozen=True)
+class Subscription:
+    channel_id: str
+    project_names: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class Config:
     bindings: tuple[ProjectBinding, ...]
     lobby_channel_id: str | None = None
+    subscriptions: tuple[Subscription, ...] = ()
 
     def for_channel(self, channel_id: str) -> ProjectBinding | None:
         for b in self.bindings:
@@ -49,8 +56,40 @@ class Config:
                 return b
         return None
 
+    def subscription_for(self, channel_id: str) -> Subscription | None:
+        for s in self.subscriptions:
+            if s.channel_id == channel_id:
+                return s
+        return None
+
     def digest_bindings(self) -> tuple[ProjectBinding, ...]:
         return tuple(b for b in self.bindings if b.digest is not None and b.channel_id)
+
+
+def _parse_subscriptions(raw_subs, known_names: set[str]) -> tuple[Subscription, ...]:
+    subscriptions: list[Subscription] = []
+    seen_channels: set[str] = set()
+    for raw_sub in raw_subs or []:
+        channel_id = raw_sub.get("channel_id")
+        if not channel_id:
+            raise ValueError("channels.yaml: each subscription requires a channel_id")
+        names = tuple(raw_sub.get("projects") or ())
+        if not names:
+            raise ValueError(
+                f"channels.yaml: subscription for {channel_id} must list at least one project"
+            )
+        for n in names:
+            if n not in known_names:
+                raise ValueError(
+                    f"channels.yaml: subscription for {channel_id} references unknown project {n!r}"
+                )
+        if channel_id in seen_channels:
+            raise ValueError(
+                f"channels.yaml: channel_id {channel_id} appears in more than one subscription"
+            )
+        seen_channels.add(channel_id)
+        subscriptions.append(Subscription(channel_id=channel_id, project_names=names))
+    return tuple(subscriptions)
 
 
 def _parse_digest(name: str, raw: dict | None) -> DigestConfig | None:
@@ -103,4 +142,17 @@ def load_config(path: str | os.PathLike) -> Config:
             )
     if sum(1 for b in bindings if b.dm) > 1:
         raise ValueError("channels.yaml: exactly one project may set dm: true in the pilot")
-    return Config(bindings=bindings, lobby_channel_id=raw.get("lobby_channel_id"))
+    lobby_channel_id = raw.get("lobby_channel_id")
+    subscriptions = _parse_subscriptions(raw.get("subscriptions"), {b.name for b in bindings})
+    for sub in subscriptions:
+        if lobby_channel_id is not None and sub.channel_id == lobby_channel_id:
+            logger.warning(
+                "channels.yaml: channel_id %r is both the lobby channel and a subscription; "
+                "the lobby dispatch wins, so the subscription is shadowed.",
+                sub.channel_id,
+            )
+    return Config(
+        bindings=bindings,
+        lobby_channel_id=lobby_channel_id,
+        subscriptions=subscriptions,
+    )
