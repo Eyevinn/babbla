@@ -65,9 +65,51 @@ async def test_route_prose_or_unknown_returns_none():
     cat = build_catalog([_b("MyTV")], lambda p: {"description": None})
 
     async def classify(text, catalog):
-        return "It's probably about MyTV I think"  # not an exact name
+        return "It's probably about MyTV I think"  # name embedded mid-sentence, no clean name line
 
     assert await route("q", cat, classify) is None
+
+
+async def test_route_matches_clean_name_line_after_reasoning():
+    # Opus 4.8 routinely reasons first, then states the bare name on its own final line.
+    cat = build_catalog([_b("MyTV"), _b("Babbla")], lambda p: {"description": None})
+
+    async def classify(text, catalog):
+        return "The description is a placeholder, so I'm inferring from the name.\n\nMyTV"
+
+    entry = await route("q", cat, classify)
+    assert entry.binding.name == "MyTV"
+
+
+async def test_route_none_line_after_reasoning_returns_none():
+    cat = build_catalog([_b("MyTV")], lambda p: {"description": None})
+
+    async def classify(text, catalog):
+        return "This question doesn't match any project.\n\nNONE"
+
+    assert await route("q", cat, classify) is None
+
+
+async def test_route_matches_multiword_name_with_emphasis_and_punctuation():
+    # Bare name line may carry markdown emphasis or trailing punctuation.
+    cat = build_catalog([_b("Agentic Engineering Kit", "private", None)], lambda p: {"description": None})
+
+    async def classify(text, catalog):
+        return "Reasoning about the match.\n\n**Agentic Engineering Kit.**"
+
+    entry = await route("q", cat, classify)
+    assert entry.binding.name == "Agentic Engineering Kit"
+
+
+async def test_route_prefers_final_conclusion_line():
+    # If the model lists candidates then concludes, the final name line wins.
+    cat = build_catalog([_b("MyTV"), _b("Babbla")], lambda p: {"description": None})
+
+    async def classify(text, catalog):
+        return "Could be MyTV.\nCould be Babbla.\n\nBabbla"
+
+    entry = await route("q", cat, classify)
+    assert entry.binding.name == "Babbla"
 
 
 def test_discovery_reply_lists_open_excludes_private():
@@ -107,3 +149,26 @@ async def test_make_classify_fn_returns_model_text():
     cat = build_catalog([_b("MyTV")], lambda p: {"description": "d"})
     classify = make_classify_fn(fake_query, "claude-x")
     assert (await classify("question", cat)).strip() == "MyTV"
+
+
+async def test_classify_fn_isolated_from_project_context():
+    # The classifier must be a pure label-emitter: no CLAUDE.md / project settings,
+    # no agentmemory MCP. Otherwise it answers like a full assistant and emits prose.
+    captured = {}
+
+    class _Msg:
+        def __init__(self, result):
+            self.result = result
+            self.session_id = None
+
+    async def fake_query(*, prompt, options):
+        captured["options"] = options
+        yield _Msg("MyTV")
+
+    cat = build_catalog([_b("MyTV")], lambda p: {"description": "d"})
+    classify = make_classify_fn(fake_query, "claude-x")
+    await classify("question", cat)
+    opts = captured["options"]
+    assert opts.setting_sources == []   # no CLAUDE.md / filesystem settings loaded
+    assert not opts.mcp_servers         # no agentmemory or other MCP servers
+    assert opts.allowed_tools == []     # already tools-less; assert it stays so
