@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import asyncio
 
-from babbla.access import Surface, authorize_ask
+from babbla.access import Surface, authorize_ask, is_open_tier
 from babbla.agent_runner import CitedAnswer
-from babbla import lobby, subscriptions
+from babbla import lobby, personal, subscriptions
 from babbla.config import Config, ProjectBinding
 
 
@@ -13,13 +13,19 @@ class UnknownSurfaceError(Exception):
 
 
 class Orchestrator:
-    def __init__(self, config: Config, runner, store, *, catalog=(), classify_fn=None, lobby_store=None) -> None:
+    def __init__(
+        self, config: Config, runner, store, *,
+        catalog=(), classify_fn=None, lobby_store=None,
+        personal_store=None, personal_default_cadence: str = "weekly",
+    ) -> None:
         self._config = config
         self._runner = runner
         self._store = store
         self._catalog = catalog
         self._classify_fn = classify_fn
         self._lobby_store = lobby_store
+        self._personal_store = personal_store
+        self._personal_default_cadence = personal_default_cadence
         self._locks: dict[str, asyncio.Lock] = {}
 
     def _lock_for(self, thread_ts: str) -> asyncio.Lock:
@@ -45,6 +51,29 @@ class Orchestrator:
                 f"No project bound to {'DM' if is_dm else channel_id}"
             )
         return binding
+
+    async def handle_command(self, user_id: str, text: str) -> str:
+        cmd = personal.parse_command(text)
+        if cmd.verb == "help":
+            return personal.render_help()
+        if cmd.verb == "list":
+            names = await self._personal_store.list_for(user_id)
+            cadence = await self._personal_store.get_cadence(user_id) or self._personal_default_cadence
+            return personal.render_list(names, cadence)
+        if cmd.verb == "digest":
+            await self._personal_store.set_cadence(user_id, cmd.arg)
+            return personal.render_digest_set(cmd.arg)
+        if cmd.verb == "subscribe":
+            binding = next((b for b in self._config.bindings if b.name == cmd.arg), None)
+            if binding is None:
+                return personal.render_unknown_project([b.name for b in self._config.bindings])
+            if not is_open_tier(binding):
+                return personal.render_private_refused(binding.name)
+            await self._personal_store.add(user_id, binding.name)
+            return personal.render_subscribed(binding.name)
+        # unsubscribe
+        await self._personal_store.remove(user_id, cmd.arg)
+        return personal.render_unsubscribed(cmd.arg)
 
     async def handle_ask(
         self, *, text: str, thread_ts: str, channel_id: str, is_dm: bool

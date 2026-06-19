@@ -339,3 +339,62 @@ async def test_subscription_stale_sticky_reroutes(store, tmp_path):
     assert runner.calls[0][1].name == "MyTV"        # routed to classifier's choice
     assert await lobby_store.get("ts") == "MyTV"    # sticky updated to the new project
     lobby_store.close()
+
+
+from babbla.session_store import PersonalSubStore
+
+
+def _config_two():
+    pub = ProjectBinding("MyTV", "o", "MyTV", "public", "C1", True)
+    priv = ProjectBinding("Secret", "o", "secret", "private", "C2", False)
+    return Config(bindings=(pub, priv))
+
+
+@pytest.fixture
+def psub(tmp_path):
+    s = PersonalSubStore(str(tmp_path / "p.db"))
+    yield s
+    s.close()
+
+
+async def test_handle_command_subscribe_known(store, psub):
+    orch = Orchestrator(_config_two(), FakeRunner(), store, personal_store=psub)
+    reply = await orch.handle_command("U1", "subscribe MyTV")
+    assert "MyTV" in reply
+    assert await psub.list_for("U1") == ("MyTV",)
+
+
+async def test_handle_command_subscribe_unknown_writes_nothing(store, psub):
+    orch = Orchestrator(_config_two(), FakeRunner(), store, personal_store=psub)
+    reply = await orch.handle_command("U1", "subscribe Ghost")
+    assert "don't know" in reply.lower()
+    assert await psub.list_for("U1") == ()
+
+
+async def test_handle_command_subscribe_private_refused(store, psub):
+    orch = Orchestrator(_config_two(), FakeRunner(), store, personal_store=psub)
+    reply = await orch.handle_command("U1", "subscribe Secret")
+    assert "private" in reply.lower()
+    assert await psub.list_for("U1") == ()
+
+
+async def test_handle_command_unsubscribe(store, psub):
+    orch = Orchestrator(_config_two(), FakeRunner(), store, personal_store=psub)
+    await psub.add("U1", "MyTV")
+    await orch.handle_command("U1", "unsubscribe MyTV")
+    assert await psub.list_for("U1") == ()
+
+
+async def test_handle_command_digest_sets_cadence(store, psub):
+    orch = Orchestrator(_config_two(), FakeRunner(), store, personal_store=psub)
+    reply = await orch.handle_command("U1", "digest daily")
+    assert "daily" in reply
+    assert await psub.get_cadence("U1") == "daily"
+
+
+async def test_handle_command_list_shows_default_cadence(store, psub):
+    orch = Orchestrator(_config_two(), FakeRunner(), store,
+                        personal_store=psub, personal_default_cadence="weekly")
+    await psub.add("U1", "MyTV")
+    reply = await orch.handle_command("U1", "list")
+    assert "MyTV" in reply and "weekly" in reply
