@@ -1,11 +1,24 @@
 import pytest
 
-from babbla.access import Surface, authorize_ask
+from babbla.access import Surface, authorize_ask, is_open_tier
 from babbla.config import ProjectBinding
 
 
 def _binding(visibility="public", channel_id="C123"):
     return ProjectBinding("MyTV", "Wkkkkk", "MyTV", visibility, channel_id, True)
+
+
+def _b(visibility):
+    return ProjectBinding("P", "o", "r", visibility, "C1", False)
+
+
+def test_is_open_tier_public_and_internal_true():
+    assert is_open_tier(_b("public")) is True
+    assert is_open_tier(_b("internal")) is True
+
+
+def test_is_open_tier_private_false():
+    assert is_open_tier(_b("private")) is False
 
 
 @pytest.mark.parametrize("visibility", ["public", "internal", "private"])

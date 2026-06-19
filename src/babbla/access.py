@@ -8,6 +8,10 @@ from babbla.config import ProjectBinding
 _OPEN_TIERS = {"public", "internal"}
 
 
+def is_open_tier(binding: ProjectBinding) -> bool:
+    return binding.visibility in _OPEN_TIERS
+
+
 class Surface(Enum):
     CHANNEL = "channel"  # a project's bound Slack channel
     DM = "dm"            # Private Ask (1:1)
@@ -38,7 +42,7 @@ def authorize_ask(binding: ProjectBinding, surface: Surface) -> AccessDecision:
     # handled identically ON PURPOSE: in a single Slack workspace every DM-er
     # is a workspace member, so the tiers only diverge at a future external /
     # Lobby edge. Do not "simplify" by dropping one tier.
-    if binding.visibility in _OPEN_TIERS:
+    if is_open_tier(binding):
         return AccessDecision(allowed=True)
     return AccessDecision(
         allowed=False,
