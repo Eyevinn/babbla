@@ -46,7 +46,7 @@ def build_orchestrator(*, config_path: str, db_path: str, secrets: Secrets, get_
     config = load_config(config_path)
     runner = AgentRunner(secrets)
     store = SessionStore(db_path)
-    if config.lobby_channel_id is None:
+    if config.lobby_channel_id is None and not config.subscriptions:
         return Orchestrator(config, runner, store)
     reader = get_json or make_get_json(secrets.github_token)
     catalog = build_catalog([b for b in config.bindings], reader)
