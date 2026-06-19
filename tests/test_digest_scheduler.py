@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta, timezone
-import pytest
-from babbla.config import Config, DigestConfig, ProjectBinding
-from babbla.digest.scheduler import DigestScheduler
+import babbla.digest.actions as A
+from babbla.config import DigestConfig, ProjectBinding
+from babbla.digest.actions import PerProjectDigestAction
+from babbla.session_store import DigestState
+from babbla.digest.anchors import Change
 
 
 def _binding(anchor="branch", wf=None):
@@ -25,79 +27,71 @@ class FakeRunner:
 
 class FakePoster:
     def __init__(self): self.posts = []
-    async def post(self, channel_id, text): self.posts.append((channel_id, text))
+    async def post(self, channel_id, text, thread_ts=None):
+        self.posts.append((channel_id, text)); return "ts"
 
 
-from babbla.session_store import DigestState
-from babbla.digest.anchors import Change
-
-
-def _sched(binding, state, *, head, changes, now):
+def _action(binding, state, *, head, changes, monkeypatch):
     store, runner, poster = FakeStore(state), FakeRunner(), FakePoster()
-    sched = DigestScheduler(
-        config=Config(bindings=(binding,)),
-        store=store, runner=runner, poster=poster,
-        get_json=lambda path: None,           # unused: monkeypatched below
-        now_fn=lambda: now,
-    )
-    # Patch the module-level anchor calls the scheduler uses.
-    import babbla.digest.scheduler as S
-    S.current_head = lambda b, *, get_json: head
-    S.changes_between = lambda o, r, base, hd, *, get_json: changes
-    S.changes_since = lambda o, r, since, *, get_json: changes
-    return sched, store, runner, poster
+    monkeypatch.setattr(A, "current_head", lambda b, *, get_json: head)
+    monkeypatch.setattr(A, "changes_between", lambda o, r, base, hd, *, get_json: changes)
+    monkeypatch.setattr(A, "changes_since", lambda o, r, since, *, get_json: changes)
+    action = PerProjectDigestAction(binding, store, lambda path: None, runner, poster)
+    return action, store, runner, poster
 
 
 NOW = datetime(2026, 6, 18, 12, tzinfo=timezone.utc)
 
 
-async def test_not_due_does_nothing():
-    state = DigestState("old", NOW.timestamp())  # same weekly bucket
-    sched, store, runner, poster = _sched(_binding(), state, head="new", changes=[Change("c", "x", None)], now=NOW)
-    await sched.tick(NOW)
+async def test_not_due_does_nothing(monkeypatch):
+    action, store, runner, poster = _action(
+        _binding(), DigestState("old", NOW.timestamp()), head="new",
+        changes=[Change("c", "x", None)], monkeypatch=monkeypatch)
+    await action.maybe_run(NOW)
     assert runner.calls == [] and poster.posts == [] and store.advanced == []
 
 
-async def test_first_run_branch_posts_window_and_sets_watermark():
-    state = DigestState(None, None)
-    changes = [Change("c1", "feat: a (#1)", 1)]
-    sched, store, runner, poster = _sched(_binding(), state, head="H", changes=changes, now=NOW)
-    await sched.tick(NOW)
+async def test_first_run_branch_posts_window_and_sets_watermark(monkeypatch):
+    action, store, runner, poster = _action(
+        _binding(), DigestState(None, None), head="H",
+        changes=[Change("c1", "feat: a (#1)", 1)], monkeypatch=monkeypatch)
+    await action.maybe_run(NOW)
     assert runner.calls == [("MyTV", ["c1"], "H")]
     assert poster.posts == [("C0XXXXXXXXX", "digest:H")]
     assert store.advanced == [("C0XXXXXXXXX", "H", NOW.timestamp())]
 
 
-async def test_first_run_deploy_is_silent_but_sets_watermark():
-    state = DigestState(None, None)
-    sched, store, runner, poster = _sched(_binding("deploy", "cicd_prod.yml"), state,
-                                          head="D", changes=[Change("x", "y", None)], now=NOW)
-    await sched.tick(NOW)
-    assert runner.calls == [] and poster.posts == []          # silent bootstrap
+async def test_first_run_deploy_is_silent_but_sets_watermark(monkeypatch):
+    action, store, runner, poster = _action(
+        _binding("deploy", "cicd_prod.yml"), DigestState(None, None), head="D",
+        changes=[Change("x", "y", None)], monkeypatch=monkeypatch)
+    await action.maybe_run(NOW)
+    assert runner.calls == [] and poster.posts == []
     assert store.advanced == [("C0XXXXXXXXX", "D", NOW.timestamp())]
 
 
-async def test_due_and_new_posts_range():
+async def test_due_and_new_posts_range(monkeypatch):
     last_week = (NOW - timedelta(days=8)).timestamp()
-    state = DigestState("old", last_week)
-    changes = [Change("c2", "fix: b", None)]
-    sched, store, runner, poster = _sched(_binding(), state, head="new", changes=changes, now=NOW)
-    await sched.tick(NOW)
+    action, store, runner, poster = _action(
+        _binding(), DigestState("old", last_week), head="new",
+        changes=[Change("c2", "fix: b", None)], monkeypatch=monkeypatch)
+    await action.maybe_run(NOW)
     assert runner.calls == [("MyTV", ["c2"], "new")]
     assert poster.posts == [("C0XXXXXXXXX", "digest:new")]
     assert store.advanced == [("C0XXXXXXXXX", "new", NOW.timestamp())]
 
 
-async def test_due_but_no_new_ship_stays_quiet_without_advancing():
+async def test_due_but_no_new_ship_stays_quiet_without_advancing(monkeypatch):
     last_week = (NOW - timedelta(days=8)).timestamp()
-    state = DigestState("samehead", last_week)
-    sched, store, runner, poster = _sched(_binding(), state, head="samehead", changes=[], now=NOW)
-    await sched.tick(NOW)
+    action, store, runner, poster = _action(
+        _binding(), DigestState("samehead", last_week), head="samehead",
+        changes=[], monkeypatch=monkeypatch)
+    await action.maybe_run(NOW)
     assert runner.calls == [] and poster.posts == [] and store.advanced == []
 
 
-async def test_no_ship_signal_skips():
-    state = DigestState(None, None)
-    sched, store, runner, poster = _sched(_binding(), state, head=None, changes=[], now=NOW)
-    await sched.tick(NOW)
+async def test_no_ship_signal_skips(monkeypatch):
+    action, store, runner, poster = _action(
+        _binding(), DigestState(None, None), head=None, changes=[], monkeypatch=monkeypatch)
+    await action.maybe_run(NOW)
     assert store.advanced == [] and poster.posts == []
