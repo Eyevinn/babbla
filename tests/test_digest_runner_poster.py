@@ -1,8 +1,8 @@
 import pytest
 from babbla.agent_runner import CitedAnswer
-from babbla.config import DigestConfig, ProjectBinding
+from babbla.config import DigestConfig, ProjectBinding, Topic
 from babbla.digest.anchors import Change
-from babbla.digest.runner import DigestRunner
+from babbla.digest.runner import DigestRunner, NOTHING_RELEVANT
 from babbla.digest.poster import SlackPoster
 
 
@@ -80,3 +80,52 @@ async def test_open_dm_returns_channel_id():
     poster = SlackPoster(client)
     assert await poster.open_dm("U7") == "D123"
     assert client.opened == "U7"
+
+
+class SentinelAgent:
+    """Returns whatever text it is configured with; captures the prompt."""
+    def __init__(self, text):
+        self.text = text
+        self.prompt = None
+    async def run_ask(self, prompt, binding, resume_session_id):
+        self.prompt = prompt
+        assert resume_session_id is None
+        return CitedAnswer(text=self.text, session_id="ignored")
+
+
+async def test_summarize_topic_injects_scoping_preamble():
+    agent = FakeAgent()
+    await DigestRunner(agent).summarize(
+        _binding(), [Change("abc1234", "feat: x", None)], "head99",
+        topic=Topic("security", "auth and secrets"),
+    )
+    p = agent.prompt
+    assert "security" in p and "auth and secrets" in p
+    assert NOTHING_RELEVANT in p
+
+
+async def test_summarize_no_topic_has_no_preamble():
+    agent = FakeAgent()
+    await DigestRunner(agent).summarize(
+        _binding(), [Change("abc1234", "feat: x", None)], "head99",
+    )
+    assert "scoped to the topic" not in agent.prompt
+    assert NOTHING_RELEVANT not in agent.prompt
+
+
+async def test_summarize_topic_sentinel_returns_empty():
+    agent = SentinelAgent(NOTHING_RELEVANT)
+    out = await DigestRunner(agent).summarize(
+        _binding(), [Change("abc1234", "feat: x", None)], "head99",
+        topic=Topic("security", "auth"),
+    )
+    assert out == ""
+
+
+async def test_summarize_shared_topic_injects_preamble_and_sentinel_empties():
+    agent = SentinelAgent(NOTHING_RELEVANT)
+    out = await DigestRunner(agent).summarize_shared(
+        _binding(), {"MyTV": [Change("a", "x", None)]}, topic=Topic("incidents", "outages"),
+    )
+    assert out == ""
+    assert "incidents" in agent.prompt and "outages" in agent.prompt and NOTHING_RELEVANT in agent.prompt
