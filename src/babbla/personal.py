@@ -91,25 +91,36 @@ def make_intent_fn(query_fn, model: str):
         system_prompt = (
             "Classify a single Slack DM and output ONE line, nothing else — no "
             "explanation, no reasoning, no tools, no backticks. The user is either "
-            "(a) MANAGING their personal project subscriptions, or (b) asking a "
-            "question about a project. Output EXACTLY one of:\n"
+            "(a) MANAGING their personal project subscriptions, (b) MANAGING their "
+            "personal digest TOPICS (thematic filters on a followed project), or (c) "
+            "asking a question about a project. Output EXACTLY one of:\n"
             "  subscribe <project name>\n"
             "  unsubscribe <project name>\n"
             "  list\n"
             "  digest daily   (or: digest weekly | digest off)\n"
+            "  topic add <project name> | <topic name> | <description>\n"
+            "  topic remove <project name> | <topic name>\n"
+            "  topic list\n"
             "  NONE\n\n"
             "Map the user's wording, e.g.:\n"
             "  'follow MyTV' / 'subscribe me to MyTV' / 'add MyTV'        -> subscribe MyTV\n"
             "  'stop following MyTV' / 'drop MyTV' / 'mute MyTV'          -> unsubscribe MyTV\n"
-            "  'what am I following?' / 'what do I follow' / 'my subs'    -> list\n"
-            "  'send my digest daily' / 'switch me to weekly' / 'pause my digest' -> digest daily|weekly|off\n"
+            "  'what am I following?' / 'my subs'                         -> list\n"
+            "  'send my digest daily' / 'pause my digest'                -> digest daily|weekly|off\n"
+            "  'only show me security in MyTV' / 'filter MyTV to security'\n"
+            "        -> topic add MyTV | security | auth, secrets, access control, CVEs, dependency security bumps\n"
+            "  'stop filtering MyTV to security' / 'remove the security topic from MyTV'\n"
+            "        -> topic remove MyTV | security\n"
+            "  'what topics do I have' / 'my filters'                     -> topic list\n"
             "  'how does the digest work?' / 'what's in MyTV?' / 'hi'     -> NONE\n\n"
+            "For `topic add`, ALWAYS supply a useful <description>: expand the user's short "
+            "topic name into a comma-separated phrase of the concepts it should match, so the "
+            "digest can filter on it. Use the user's own description verbatim if they gave one. "
             "Copy a project name EXACTLY as written in the list. A 'what/show/list my "
-            "subscriptions' question is `list`, NOT a question. If the message is about "
-            "digest FREQUENCY (mentions 'digest', daily, weekly, or off as a cadence), it "
-            "is always a `digest` command — never subscribe/unsubscribe. Anything that is "
-            "a question ABOUT a project's code/history, a greeting, or unclear is NONE. "
-            "When genuinely unsure, output NONE.\n\nProjects:\n" + listing
+            "subscriptions' question is `list`; 'what topics do I have' is `topic list`. If the "
+            "message is about digest FREQUENCY (daily/weekly/off), it is a `digest` command. "
+            "Anything that is a question ABOUT a project's code/history, a greeting, or unclear "
+            "is NONE. When genuinely unsure, output NONE.\n\nProjects:\n" + listing
         )
         options = ClaudeAgentOptions(
             model=model, system_prompt=system_prompt, allowed_tools=[]
@@ -168,4 +179,37 @@ def render_help() -> str:
         "• `/babbla unsubscribe <project>` — stop following\n"
         "• `/babbla list` — show your projects and digest cadence\n"
         "• `/babbla digest daily|weekly|off` — set your personal-digest cadence"
+    )
+
+
+def render_topic_added(project: str, name: str, description: str) -> str:
+    return (
+        f"✅ Added topic *{name}* to *{project}* — your digest's *{project}* section will "
+        f"now include only changes about _{description}_.\n"
+        f"Restate it to refine the description, or say \"remove the {name} topic from "
+        f"{project}\" to drop it."
+    )
+
+
+def render_topic_removed(project: str, name: str) -> str:
+    return f"Removed topic *{name}* from *{project}*."
+
+
+def render_topic_list(topics_by_project: dict) -> str:
+    if not topics_by_project:
+        return (
+            "You have no digest topics. In a DM, say something like "
+            "\"only show me security changes in MyTV\" and I'll add one."
+        )
+    lines = []
+    for project, topics in topics_by_project.items():
+        labels = ", ".join(f"*{n}*" for n, _ in topics)
+        lines.append(f"• *{project}*: {labels}")
+    return "Your digest topics (your digest is filtered to these per project):\n" + "\n".join(lines)
+
+
+def render_topic_needs_follow(project: str) -> str:
+    return (
+        f"You're not following *{project}* yet, so it isn't in your digest. "
+        f"Follow it first (e.g. \"subscribe to {project}\"), then add a topic."
     )
