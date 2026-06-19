@@ -1,39 +1,47 @@
-import pytest
-from datetime import datetime, timezone
-from babbla.config import Config, DigestConfig, ProjectBinding
-from babbla.digest.__main__ import run_once
+from babbla.digest.__main__ import _utcnow, run_once
+from babbla.digest.scheduler import ActionScheduler
 
 
-def _binding(name, channel):
-    return ProjectBinding(name, "o", "r", "public", channel, False, DigestConfig("weekly", "UTC", "branch"))
+class RecordingAction:
+    """Matches the real Action contract: a `.project` (None for non-project-scoped
+    actions like shared/personal digests) and a `maybe_run` coroutine."""
+
+    def __init__(self, project=None, label="action"):
+        self.project = project
+        self.label = label
+        self.ran = False
+
+    async def maybe_run(self, now):
+        self.ran = True
 
 
-class RecordingScheduler:
-    def __init__(self, config):
-        self._config = config
-        self.ticked = []
-    async def tick(self, now):
-        self.ticked.append([b.name for b in self._config.digest_bindings()])
+def _sched(*actions):
+    return ActionScheduler(actions=tuple(actions), now_fn=_utcnow)
 
 
-async def test_run_once_ticks_all_projects():
-    cfg = Config(bindings=(_binding("MyTV", "C0AAA"), _binding("Other", "C0BBB")))
-    sched = RecordingScheduler(cfg)
-    rc = await run_once(sched)
+async def test_run_once_ticks_all_actions():
+    a, b = RecordingAction("MyTV"), RecordingAction("Other")
+    rc = await run_once(_sched(a, b))
     assert rc == 0
-    assert sched.ticked == [["MyTV", "Other"]]
+    assert a.ran and b.ran
 
 
-async def test_run_once_single_project():
-    cfg = Config(bindings=(_binding("MyTV", "C0AAA"), _binding("Other", "C0BBB")))
-    sched = RecordingScheduler(cfg)
-    rc = await run_once(sched, project="MyTV")
+async def test_run_once_single_project_runs_only_that_action():
+    a, b = RecordingAction("MyTV"), RecordingAction("Other")
+    rc = await run_once(_sched(a, b), project="MyTV")
     assert rc == 0
-    assert sched.ticked == [["MyTV"]]
+    assert a.ran and not b.ran
 
 
-async def test_run_once_unknown_project_errors():
-    cfg = Config(bindings=(_binding("MyTV", "C0AAA"),))
-    sched = RecordingScheduler(cfg)
-    rc = await run_once(sched, project="Nope")
+async def test_run_once_single_project_with_multiword_name():
+    a = RecordingAction("Agentic Engineering Kit")
+    rc = await run_once(_sched(a), project="Agentic Engineering Kit")
+    assert rc == 0
+    assert a.ran
+
+
+async def test_run_once_unknown_project_errors_and_runs_nothing():
+    a = RecordingAction("MyTV")
+    rc = await run_once(_sched(a), project="Nope")
     assert rc == 2
+    assert not a.ran

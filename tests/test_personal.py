@@ -12,6 +12,15 @@ def test_parse_subscribe_and_unsubscribe():
     assert personal.parse_command("unsubscribe MyTV") == Command("unsubscribe", "MyTV")
 
 
+def test_parse_subscribe_keeps_multiword_project_name():
+    assert personal.parse_command("subscribe Agentic Engineering Kit") == Command(
+        "subscribe", "Agentic Engineering Kit"
+    )
+    assert personal.parse_command("unsubscribe Agentic Engineering Kit") == Command(
+        "unsubscribe", "Agentic Engineering Kit"
+    )
+
+
 def test_parse_subscribe_without_arg_is_help():
     assert personal.parse_command("subscribe") == Command("help")
     assert personal.parse_command("unsubscribe") == Command("help")

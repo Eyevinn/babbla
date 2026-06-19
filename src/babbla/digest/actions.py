@@ -19,6 +19,7 @@ class PerProjectDigestAction:
         self._get_json = get_json
         self._runner = runner
         self._poster = poster
+        self.project = binding.name
         self.label = f"digest:{binding.name}"
 
     async def maybe_run(self, now: datetime) -> None:
@@ -177,6 +178,7 @@ class QuizAction:
         self._tz = tz
         self._count = count
         self._key = f"quiz:{binding.name}"
+        self.project = binding.name
         self.label = self._key
 
     async def maybe_run(self, now: datetime) -> None:

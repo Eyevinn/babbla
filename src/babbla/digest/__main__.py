@@ -6,7 +6,8 @@ import os
 import sys
 from datetime import datetime, timezone
 
-from babbla.config import Config, load_config
+from babbla.config import load_config
+from babbla.digest.scheduler import ActionScheduler
 
 
 def _utcnow() -> datetime:
@@ -15,12 +16,14 @@ def _utcnow() -> datetime:
 
 async def run_once(scheduler, project: str | None = None) -> int:
     if project is not None:
-        names = {b.name for b in scheduler._config.bindings}
-        if project not in names:
+        matching = tuple(
+            a for a in scheduler._actions if getattr(a, "project", None) == project
+        )
+        if not matching:
             print(f"unknown project: {project}", file=sys.stderr)
             return 2
-        scheduler._config = Config(
-            bindings=tuple(b for b in scheduler._config.bindings if b.name == project)
+        scheduler = ActionScheduler(
+            actions=matching, now_fn=scheduler._now_fn, interval_s=scheduler._interval_s
         )
     await scheduler.tick(_utcnow())
     return 0
