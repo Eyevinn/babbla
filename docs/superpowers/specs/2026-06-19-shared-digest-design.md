@@ -1,6 +1,13 @@
 # Shared Digest Fan-out — Design
 
-**Status:** Approved (brainstorming)
+> **Folded into [Scheduled Actions Framework](2026-06-19-scheduled-actions-design.md) (2026-06-19).**
+> During brainstorming the scope grew: rather than a digest-only scheduler, the shared digest became one
+> action in a general scheduled-actions framework (alongside the per-project digest and a new quiz). All
+> shared-digest decisions here (per-project anchor, `SubscriptionDigest`, `SharedDigestStateStore`,
+> `head_for`, `summarize_shared`, advance-all) carry over verbatim into that spec, which is the one to
+> implement. This document is retained for the shared-digest design rationale.
+
+**Status:** Superseded by the Scheduled Actions Framework spec (decisions carried over)
 **Date:** 2026-06-19
 **Slice of:** [Phase 4 — Lobby + Subscriptions / Visibility](../../ROADMAP.md#phase-4--lobby--subscriptions--visibility)
 **Builds on:** [Shared Subscriptions](2026-06-19-shared-subscriptions-design.md) (slice 3),
