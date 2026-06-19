@@ -127,3 +127,34 @@ async def test_personal_digest_state_advance_roundtrip(tmp_path):
     # isolation between users
     assert (await s.get("U2")).watermarks == {}
     s.close()
+
+
+async def test_personal_topics_add_list_remove(tmp_path):
+    s = PersonalSubStore(str(tmp_path / "t.db"))
+    await s.add_topic("U1", "MyTV", "security", "auth, secrets, CVEs")
+    await s.add_topic("U1", "MyTV", "playback", "HLS, player, buffering")
+    await s.add_topic("U1", "Babbla", "lobby", "routing, classifier")
+    topics = await s.topics_for("U1")
+    assert topics == {
+        "MyTV": (("security", "auth, secrets, CVEs"), ("playback", "HLS, player, buffering")),
+        "Babbla": (("lobby", "routing, classifier"),),
+    }
+    await s.remove_topic("U1", "MyTV", "security")
+    assert (await s.topics_for("U1"))["MyTV"] == (("playback", "HLS, player, buffering"),)
+    s.close()
+
+
+async def test_personal_topics_readd_updates_description_and_normalizes(tmp_path):
+    s = PersonalSubStore(str(tmp_path / "t.db"))
+    await s.add_topic("U1", "MyTV", "Security", "first")
+    await s.add_topic("U1", "MyTV", "  security ", "second")   # same identity, normalized
+    topics = await s.topics_for("U1")
+    assert topics == {"MyTV": (("security", "second"),)}        # one row, updated desc
+    s.close()
+
+
+async def test_personal_topics_isolated_per_user(tmp_path):
+    s = PersonalSubStore(str(tmp_path / "t.db"))
+    await s.add_topic("U1", "MyTV", "security", "x")
+    assert await s.topics_for("U2") == {}
+    s.close()

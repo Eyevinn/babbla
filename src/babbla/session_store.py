@@ -276,6 +276,17 @@ CREATE TABLE IF NOT EXISTS personal_prefs (
 )
 """
 
+_PERSONAL_TOPICS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS personal_topics (
+    user_id      TEXT NOT NULL,
+    project_name TEXT NOT NULL,
+    name         TEXT NOT NULL,
+    description  TEXT NOT NULL,
+    created_at   REAL NOT NULL,
+    PRIMARY KEY (user_id, project_name, name)
+)
+"""
+
 
 class PersonalSubStore:
     """A user's persisted project interests + their personal-digest cadence."""
@@ -285,6 +296,7 @@ class PersonalSubStore:
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.execute(_PERSONAL_SUBS_SCHEMA)
         self._conn.execute(_PERSONAL_PREFS_SCHEMA)
+        self._conn.execute(_PERSONAL_TOPICS_SCHEMA)
         self._conn.commit()
 
     async def add(self, user_id: str, project: str) -> None:
@@ -344,6 +356,47 @@ class PersonalSubStore:
             (user_id, cadence),
         )
         self._conn.commit()
+
+    @staticmethod
+    def _norm(name: str) -> str:
+        return (name or "").strip().casefold()
+
+    async def add_topic(self, user_id: str, project: str, name: str, description: str) -> None:
+        await asyncio.to_thread(self._add_topic_sync, user_id, project, name, description)
+
+    def _add_topic_sync(self, user_id: str, project: str, name: str, description: str) -> None:
+        # Re-adding an existing topic updates only its description; created_at is preserved.
+        self._conn.execute(
+            "INSERT INTO personal_topics (user_id, project_name, name, description, created_at) "
+            "VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(user_id, project_name, name) DO UPDATE SET description = excluded.description",
+            (user_id, project, self._norm(name), description, self._now()),
+        )
+        self._conn.commit()
+
+    async def remove_topic(self, user_id: str, project: str, name: str) -> None:
+        await asyncio.to_thread(self._remove_topic_sync, user_id, project, name)
+
+    def _remove_topic_sync(self, user_id: str, project: str, name: str) -> None:
+        self._conn.execute(
+            "DELETE FROM personal_topics WHERE user_id = ? AND project_name = ? AND name = ?",
+            (user_id, project, self._norm(name)),
+        )
+        self._conn.commit()
+
+    async def topics_for(self, user_id: str) -> dict[str, tuple[tuple[str, str], ...]]:
+        return await asyncio.to_thread(self._topics_for_sync, user_id)
+
+    def _topics_for_sync(self, user_id: str) -> dict[str, tuple[tuple[str, str], ...]]:
+        rows = self._conn.execute(
+            "SELECT project_name, name, description FROM personal_topics "
+            "WHERE user_id = ? ORDER BY created_at, project_name, name",
+            (user_id,),
+        ).fetchall()
+        out: dict[str, tuple] = {}
+        for project, name, description in rows:
+            out[project] = out.get(project, ()) + ((name, description),)
+        return out
 
     def close(self) -> None:
         self._conn.close()
