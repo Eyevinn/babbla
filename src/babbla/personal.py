@@ -10,13 +10,17 @@ from babbla.agent_runner import _extract_text
 _CADENCES = {"daily", "weekly", "off"}
 # Verbs that count as a subscription-management intent. Anything else the
 # classifier emits (prose, a greeting, "NONE") falls through to the Q&A agent.
-_MGMT_VERBS = {"subscribe", "unsubscribe", "list", "subscriptions", "digest"}
+_MGMT_VERBS = {"subscribe", "unsubscribe", "list", "subscriptions", "digest", "topic"}
 
 
 @dataclass(frozen=True)
 class Command:
     verb: str               # subscribe | unsubscribe | list | digest | help
+                            # | topic-add | topic-remove | topic-list
     arg: str | None = None  # project name (sub/unsub) or cadence (digest)
+    project: str | None = None
+    name: str | None = None
+    description: str | None = None
 
 
 def parse_command(text: str) -> Command:
@@ -33,6 +37,18 @@ def parse_command(text: str) -> Command:
     if verb == "digest":
         if len(tokens) >= 2 and tokens[1].lower() in _CADENCES:
             return Command("digest", tokens[1].lower())
+        return Command("help")
+    if verb == "topic":
+        body = text.split(None, 2)            # ["topic", sub, "rest..."]
+        sub = body[1].lower() if len(body) > 1 else ""
+        rest = body[2] if len(body) > 2 else ""
+        if sub == "list" and len(body) == 2:
+            return Command("topic-list")
+        parts = [p.strip() for p in rest.split("|")]
+        if sub == "add" and len(parts) >= 3 and all(parts[:3]):
+            return Command("topic-add", project=parts[0], name=parts[1], description=parts[2])
+        if sub == "remove" and len(parts) >= 2 and all(parts[:2]):
+            return Command("topic-remove", project=parts[0], name=parts[1])
         return Command("help")
     return Command("help")
 

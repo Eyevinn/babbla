@@ -121,3 +121,38 @@ async def test_classify_intent_ignores_reasoning_before_command_line():
 async def test_classify_intent_none_after_reasoning_is_not_a_command():
     reply = "This reads like a question about the repo, not a subscription change.\nNONE"
     assert await personal.classify_intent("how does X work?", [], _intent(reply)) is None
+
+
+def test_parse_topic_add():
+    cmd = personal.parse_command("topic add MyTV | security | auth, secrets, CVEs")
+    assert cmd.verb == "topic-add"
+    assert cmd.project == "MyTV"
+    assert cmd.name == "security"
+    assert cmd.description == "auth, secrets, CVEs"
+
+
+def test_parse_topic_add_multiword_project_and_desc():
+    cmd = personal.parse_command("topic add Agentic Kit | rag | retrieval, embeddings | extra")
+    assert cmd.verb == "topic-add"
+    assert cmd.project == "Agentic Kit"
+    assert cmd.name == "rag"
+    assert cmd.description == "retrieval, embeddings"   # only first 3 pipe fields used
+
+
+def test_parse_topic_remove():
+    cmd = personal.parse_command("topic remove MyTV | security")
+    assert cmd.verb == "topic-remove"
+    assert cmd.project == "MyTV"
+    assert cmd.name == "security"
+
+
+def test_parse_topic_list():
+    assert personal.parse_command("topic list").verb == "topic-list"
+
+
+def test_parse_topic_malformed_is_help():
+    assert personal.parse_command("topic add MyTV | security").verb == "help"   # missing description
+    assert personal.parse_command("topic remove MyTV").verb == "help"           # missing name
+    assert personal.parse_command("topic wat").verb == "help"
+    assert personal.parse_command("topic list extra").verb == "help"   # list takes no args
+    assert personal.parse_command("topic").verb == "help"              # no subcommand
