@@ -12,9 +12,10 @@ def _binding():
 
 
 class FakeAgent:
-    def __init__(self): self.prompt = None
-    async def run_ask(self, text, binding, resume_session_id):
+    def __init__(self): self.prompt = None; self.system_prompt = None
+    async def run_ask(self, text, binding, resume_session_id, *, system_prompt=None):
         self.prompt = text
+        self.system_prompt = system_prompt
         assert resume_session_id is None       # digests are stateless
         return CitedAnswer(text="SUMMARY", session_id="ignored")
 
@@ -69,6 +70,37 @@ async def test_summarize_shared_groups_by_project():
     assert "def5678" in p and "fix: retry" in p
 
 
+async def test_summarize_uses_digest_system_prompt_not_qa():
+    agent = FakeAgent()
+    await DigestRunner(agent).summarize(
+        _binding(), [Change("abc1234", "feat: x", None)], "head99",
+    )
+    sp = agent.system_prompt
+    assert sp is not None                      # an explicit digest prompt is passed
+    assert "disclaimer" in sp.lower()          # forbids the scope/verification disclaimer
+    assert "digest" in sp.lower()
+
+
+async def test_summarize_shared_uses_digest_system_prompt():
+    agent = FakeAgent()
+    await DigestRunner(agent).summarize_shared(
+        _binding(), {"MyTV": [Change("a", "x", None)]},
+    )
+    assert agent.system_prompt is not None
+    assert "disclaimer" in agent.system_prompt.lower()
+
+
+async def test_summarize_shared_labels_sections_with_repo_slug():
+    agent = FakeAgent()
+    await DigestRunner(agent).summarize_shared(
+        _binding(),
+        {"MyTV": [Change("abc1234", "feat", None)], "Stream": [Change("def5678", "fix", None)]},
+        slugs={"MyTV": "Wkkkkk/MyTV", "Stream": "eyevinn/stream-starter"},
+    )
+    p = agent.prompt
+    assert "Wkkkkk/MyTV" in p and "eyevinn/stream-starter" in p
+
+
 async def test_open_dm_returns_channel_id():
     class FakeClient:
         def __init__(self):
@@ -87,8 +119,9 @@ class SentinelAgent:
     def __init__(self, text):
         self.text = text
         self.prompt = None
-    async def run_ask(self, prompt, binding, resume_session_id):
+    async def run_ask(self, prompt, binding, resume_session_id, *, system_prompt=None):
         self.prompt = prompt
+        self.system_prompt = system_prompt
         assert resume_session_id is None
         return CitedAnswer(text=self.text, session_id="ignored")
 

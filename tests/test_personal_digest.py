@@ -12,7 +12,7 @@ BY_NAME = {"MyTV": MYTV, "Secret": SECRET}
 
 
 class FakeRunner:
-    async def summarize_shared(self, binding, per_project_changes):
+    async def summarize_shared(self, binding, per_project_changes, slugs=None):
         return "digest text"
 
 
