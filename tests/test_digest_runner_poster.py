@@ -67,3 +67,16 @@ async def test_summarize_shared_groups_by_project():
     assert "MyTV" in p and "Stream" in p
     assert "abc1234" in p and "feat: playback (#7)" in p
     assert "def5678" in p and "fix: retry" in p
+
+
+async def test_open_dm_returns_channel_id():
+    class FakeClient:
+        def __init__(self):
+            self.opened = None
+        async def conversations_open(self, *, users):
+            self.opened = users
+            return {"channel": {"id": "D123"}}
+    client = FakeClient()
+    poster = SlackPoster(client)
+    assert await poster.open_dm("U7") == "D123"
+    assert client.opened == "U7"

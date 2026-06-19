@@ -4,7 +4,7 @@ import logging
 
 import pytest
 
-from babbla.config import Config, ProjectBinding, load_config, SubscriptionDigest, QuizConfig
+from babbla.config import Config, ProjectBinding, load_config, SubscriptionDigest, QuizConfig, PersonalDigestConfig
 
 FIXTURE = """
 projects:
@@ -245,3 +245,32 @@ def test_quiz_bad_count_raises(tmp_path):
     text = QUIZ_FIXTURE.replace("count: 5", "count: 0")
     with pytest.raises(ValueError, match="quiz.count"):
         load_config(_write(tmp_path, text))
+
+
+_PROJECT = (
+    "projects:\n  - name: MyTV\n    owner: o\n    repo: MyTV\n"
+    "    visibility: public\n    channel_id: C1\n    dm: true\n"
+)
+
+
+def test_personal_digest_absent_is_none(tmp_path):
+    cfg = load_config(_write(tmp_path, _PROJECT))
+    assert cfg.personal_digest is None
+
+
+def test_personal_digest_parses(tmp_path):
+    body = _PROJECT + "personal_digest:\n  default_cadence: daily\n  tz: Europe/Stockholm\n"
+    cfg = load_config(_write(tmp_path, body))
+    assert cfg.personal_digest == PersonalDigestConfig(default_cadence="daily", tz="Europe/Stockholm")
+
+
+def test_personal_digest_invalid_cadence_raises(tmp_path):
+    body = _PROJECT + "personal_digest:\n  default_cadence: hourly\n  tz: UTC\n"
+    with pytest.raises(ValueError, match="default_cadence"):
+        load_config(_write(tmp_path, body))
+
+
+def test_personal_digest_invalid_tz_raises(tmp_path):
+    body = _PROJECT + "personal_digest:\n  default_cadence: weekly\n  tz: Mars/Phobos\n"
+    with pytest.raises(ValueError, match="time zone"):
+        load_config(_write(tmp_path, body))

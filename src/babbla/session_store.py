@@ -258,3 +258,141 @@ class ActionTimerStore:
 
     def close(self) -> None:
         self._conn.close()
+
+
+_PERSONAL_SUBS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS personal_subs (
+    user_id      TEXT NOT NULL,
+    project_name TEXT NOT NULL,
+    created_at   REAL NOT NULL,
+    PRIMARY KEY (user_id, project_name)
+)
+"""
+
+_PERSONAL_PREFS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS personal_prefs (
+    user_id TEXT PRIMARY KEY,
+    cadence TEXT NOT NULL
+)
+"""
+
+
+class PersonalSubStore:
+    """A user's persisted project interests + their personal-digest cadence."""
+
+    def __init__(self, db_path: str, time_fn: Callable[[], float] = time.time) -> None:
+        self._now = time_fn
+        self._conn = sqlite3.connect(db_path, check_same_thread=False)
+        self._conn.execute(_PERSONAL_SUBS_SCHEMA)
+        self._conn.execute(_PERSONAL_PREFS_SCHEMA)
+        self._conn.commit()
+
+    async def add(self, user_id: str, project: str) -> None:
+        await asyncio.to_thread(self._add_sync, user_id, project)
+
+    def _add_sync(self, user_id: str, project: str) -> None:
+        self._conn.execute(
+            "INSERT OR IGNORE INTO personal_subs (user_id, project_name, created_at) "
+            "VALUES (?, ?, ?)",
+            (user_id, project, self._now()),
+        )
+        self._conn.commit()
+
+    async def remove(self, user_id: str, project: str) -> None:
+        await asyncio.to_thread(self._remove_sync, user_id, project)
+
+    def _remove_sync(self, user_id: str, project: str) -> None:
+        self._conn.execute(
+            "DELETE FROM personal_subs WHERE user_id = ? AND project_name = ?",
+            (user_id, project),
+        )
+        self._conn.commit()
+
+    async def list_for(self, user_id: str) -> tuple[str, ...]:
+        return await asyncio.to_thread(self._list_for_sync, user_id)
+
+    def _list_for_sync(self, user_id: str) -> tuple[str, ...]:
+        rows = self._conn.execute(
+            "SELECT project_name FROM personal_subs WHERE user_id = ? ORDER BY created_at, project_name",
+            (user_id,),
+        ).fetchall()
+        return tuple(r[0] for r in rows)
+
+    async def all_user_ids(self) -> tuple[str, ...]:
+        return await asyncio.to_thread(self._all_user_ids_sync)
+
+    def _all_user_ids_sync(self) -> tuple[str, ...]:
+        rows = self._conn.execute("SELECT DISTINCT user_id FROM personal_subs").fetchall()
+        return tuple(r[0] for r in rows)
+
+    async def get_cadence(self, user_id: str) -> str | None:
+        return await asyncio.to_thread(self._get_cadence_sync, user_id)
+
+    def _get_cadence_sync(self, user_id: str) -> str | None:
+        row = self._conn.execute(
+            "SELECT cadence FROM personal_prefs WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        return row[0] if row else None
+
+    async def set_cadence(self, user_id: str, cadence: str) -> None:
+        await asyncio.to_thread(self._set_cadence_sync, user_id, cadence)
+
+    def _set_cadence_sync(self, user_id: str, cadence: str) -> None:
+        self._conn.execute(
+            "INSERT INTO personal_prefs (user_id, cadence) VALUES (?, ?) "
+            "ON CONFLICT(user_id) DO UPDATE SET cadence = excluded.cadence",
+            (user_id, cadence),
+        )
+        self._conn.commit()
+
+    def close(self) -> None:
+        self._conn.close()
+
+
+_PERSONAL_DIGEST_SCHEMA = """
+CREATE TABLE IF NOT EXISTS personal_digest_state (
+    user_id        TEXT NOT NULL,
+    project_name   TEXT NOT NULL,
+    watermark_sha  TEXT,
+    last_digest_at REAL,
+    PRIMARY KEY (user_id, project_name)
+)
+"""
+
+
+class PersonalDigestStateStore:
+    """Per-user-per-project digest watermark; mirrors SharedDigestStateStore."""
+
+    def __init__(self, db_path: str) -> None:
+        self._conn = sqlite3.connect(db_path, check_same_thread=False)
+        self._conn.execute(_PERSONAL_DIGEST_SCHEMA)
+        self._conn.commit()
+
+    async def get(self, user_id: str) -> SharedDigestState:
+        return await asyncio.to_thread(self._get_sync, user_id)
+
+    def _get_sync(self, user_id: str) -> SharedDigestState:
+        rows = self._conn.execute(
+            "SELECT project_name, watermark_sha, last_digest_at FROM personal_digest_state "
+            "WHERE user_id = ?",
+            (user_id,),
+        ).fetchall()
+        watermarks = {r[0]: r[1] for r in rows}
+        last = max((r[2] for r in rows if r[2] is not None), default=None)
+        return SharedDigestState(watermarks=watermarks, last_digest_at=last)
+
+    async def advance(self, user_id: str, heads: dict[str, str], last_digest_at: float) -> None:
+        await asyncio.to_thread(self._advance_sync, user_id, heads, last_digest_at)
+
+    def _advance_sync(self, user_id: str, heads: dict[str, str], last_digest_at: float) -> None:
+        for project_name, head in heads.items():
+            self._conn.execute(
+                "INSERT INTO personal_digest_state (user_id, project_name, watermark_sha, last_digest_at) "
+                "VALUES (?, ?, ?, ?) ON CONFLICT(user_id, project_name) DO UPDATE SET "
+                "watermark_sha = excluded.watermark_sha, last_digest_at = excluded.last_digest_at",
+                (user_id, project_name, head, last_digest_at),
+            )
+        self._conn.commit()
+
+    def close(self) -> None:
+        self._conn.close()

@@ -11,7 +11,9 @@ from slack_sdk.web.async_client import AsyncWebClient  # noqa: F401  (type only;
 
 from babbla.agent_runner import AgentRunner, Secrets
 from babbla.config import load_config
-from babbla.digest.actions import PerProjectDigestAction, QuizAction, SharedDigestAction
+from babbla.digest.actions import (
+    PerProjectDigestAction, PersonalDigestAction, QuizAction, SharedDigestAction,
+)
 from babbla.digest.anchors import make_get_json
 from babbla.digest.poster import SlackPoster
 from babbla.digest.quiz import QuizRunner
@@ -21,7 +23,8 @@ from babbla.lobby import build_catalog, make_classify_fn
 from babbla.orchestrator import Orchestrator
 from babbla.read_only import DEFAULT_MODEL
 from babbla.session_store import (
-    ActionTimerStore, DigestStateStore, LobbyThreadStore, SessionStore, SharedDigestStateStore,
+    ActionTimerStore, DigestStateStore, LobbyThreadStore, PersonalDigestStateStore,
+    PersonalSubStore, SessionStore, SharedDigestStateStore,
 )
 from babbla.slack_adapter import register_handlers
 
@@ -50,8 +53,13 @@ def build_orchestrator(*, config_path: str, db_path: str, secrets: Secrets, get_
     config = load_config(config_path)
     runner = AgentRunner(secrets)
     store = SessionStore(db_path)
-    if config.lobby_channel_id is None and not config.subscriptions:
-        return Orchestrator(config, runner, store)
+    personal_store = PersonalSubStore(db_path)
+    default_cadence = config.personal_digest.default_cadence if config.personal_digest else "weekly"
+    if config.lobby_channel_id is None and not config.subscriptions and config.personal_digest is None:
+        return Orchestrator(
+            config, runner, store,
+            personal_store=personal_store, personal_default_cadence=default_cadence,
+        )
     reader = get_json or make_get_json(secrets.github_token)
     catalog = build_catalog([b for b in config.bindings], reader)
     return Orchestrator(
@@ -59,6 +67,8 @@ def build_orchestrator(*, config_path: str, db_path: str, secrets: Secrets, get_
         catalog=catalog,
         classify_fn=make_classify_fn(_sdk_query, secrets.model),
         lobby_store=LobbyThreadStore(db_path),
+        personal_store=personal_store,
+        personal_default_cadence=default_cadence,
     )
 
 
@@ -82,6 +92,15 @@ def build_scheduler(*, config, secrets: Secrets, db_path: str, client) -> Action
         actions.append(SharedDigestAction(s, by_name, shared_store, get_json, digest_runner, poster))
     for b in config.quiz_bindings():
         actions.append(QuizAction(b, timer_store, quiz_runner, poster, b.quiz.cadence, b.quiz.tz, b.quiz.count))
+    if config.personal_digest is not None:
+        personal_store = PersonalSubStore(db_path)
+        personal_state = PersonalDigestStateStore(db_path)
+        actions.append(
+            PersonalDigestAction(
+                personal_store, personal_state, by_name, get_json, digest_runner, poster,
+                config.personal_digest.default_cadence, config.personal_digest.tz,
+            )
+        )
     return ActionScheduler(actions=tuple(actions), now_fn=_utcnow)
 
 

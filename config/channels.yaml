@@ -40,3 +40,11 @@ projects:
 #        cadence: weekly           # daily | weekly
 #        tz: Europe/Stockholm
 #        count: 3                  # number of questions (default 3)
+# Personal Subscriptions (optional). When this block is present, subscribers
+# receive a Personal Digest by DM on the cadence each user picks via
+# `/babbla digest <daily|weekly|off>` (default below applies until they choose).
+# Management (`/babbla subscribe|unsubscribe|list`) works even without this block;
+# personal DM-ask routing and the digest require it.
+# personal_digest:
+#   default_cadence: weekly   # daily | weekly
+#   tz: Europe/Stockholm

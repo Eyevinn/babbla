@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import asyncio
 
-from babbla.access import Surface, authorize_ask
+from babbla.access import Surface, authorize_ask, is_open_tier
 from babbla.agent_runner import CitedAnswer
-from babbla import lobby, subscriptions
+from babbla import lobby, personal, subscriptions
 from babbla.config import Config, ProjectBinding
 
 
@@ -13,13 +13,19 @@ class UnknownSurfaceError(Exception):
 
 
 class Orchestrator:
-    def __init__(self, config: Config, runner, store, *, catalog=(), classify_fn=None, lobby_store=None) -> None:
+    def __init__(
+        self, config: Config, runner, store, *,
+        catalog=(), classify_fn=None, lobby_store=None,
+        personal_store=None, personal_default_cadence: str = "weekly",
+    ) -> None:
         self._config = config
         self._runner = runner
         self._store = store
         self._catalog = catalog
         self._classify_fn = classify_fn
         self._lobby_store = lobby_store
+        self._personal_store = personal_store
+        self._personal_default_cadence = personal_default_cadence
         self._locks: dict[str, asyncio.Lock] = {}
 
     def _lock_for(self, thread_ts: str) -> asyncio.Lock:
@@ -46,14 +52,45 @@ class Orchestrator:
             )
         return binding
 
+    async def handle_command(self, user_id: str, text: str) -> str:
+        cmd = personal.parse_command(text)
+        if cmd.verb == "help":
+            return personal.render_help()
+        if cmd.verb == "list":
+            names = await self._personal_store.list_for(user_id)
+            cadence = await self._personal_store.get_cadence(user_id) or self._personal_default_cadence
+            return personal.render_list(names, cadence)
+        if cmd.verb == "digest":
+            await self._personal_store.set_cadence(user_id, cmd.arg)
+            return personal.render_digest_set(cmd.arg)
+        if cmd.verb == "subscribe":
+            binding = next((b for b in self._config.bindings if b.name == cmd.arg), None)
+            if binding is None:
+                return personal.render_unknown_project([b.name for b in self._config.bindings])
+            if not is_open_tier(binding):
+                return personal.render_private_refused(binding.name)
+            await self._personal_store.add(user_id, binding.name)
+            return personal.render_subscribed(binding.name)
+        # unsubscribe
+        await self._personal_store.remove(user_id, cmd.arg)
+        return personal.render_unsubscribed(cmd.arg)
+
     async def handle_ask(
-        self, *, text: str, thread_ts: str, channel_id: str, is_dm: bool
+        self, *, text: str, thread_ts: str, channel_id: str, is_dm: bool,
+        user_id: str | None = None,
     ) -> CitedAnswer:
         if not is_dm:
             sub = self._config.subscription_for(channel_id)
             if sub is not None:
                 return await self._handle_subscription_ask(
                     text=text, thread_ts=thread_ts, sub=sub
+                )
+        elif self._personal_store is not None and user_id is not None and self._catalog:
+            names = await self._personal_store.list_for(user_id)
+            entries = subscriptions.entries_for(self._catalog, names) if names else ()
+            if entries:
+                return await self._handle_personal_ask(
+                    text=text, thread_ts=thread_ts, entries=entries
                 )
         binding = self._resolve(channel_id, is_dm)
         surface = Surface.DM if is_dm else Surface.CHANNEL
@@ -100,6 +137,26 @@ class Orchestrator:
                 if answer.session_id:
                     await self._store.put_session(thread_ts, answer.session_id)
                 return answer       # no pointer suffix — the asker is already home
+            finally:
+                self._release_lock(thread_ts)
+
+    async def _handle_personal_ask(self, *, text: str, thread_ts: str, entries) -> CitedAnswer:
+        async with self._lock_for(thread_ts):
+            try:
+                entry = await self._resolve_subscription(text, thread_ts, entries)
+                if entry is None:
+                    return CitedAnswer(
+                        text=subscriptions.subscription_clarify(entries), session_id=None
+                    )
+                decision = authorize_ask(entry.binding, Surface.DM)   # denies private (flip-after-subscribe)
+                if not decision.allowed:
+                    return CitedAnswer(text=decision.pointer, session_id=None)
+                await self._lobby_store.put(thread_ts, entry.binding.name)
+                resume = await self._store.get_session(thread_ts)
+                answer = await self._runner.run_ask(text, entry.binding, resume)
+                if answer.session_id:
+                    await self._store.put_session(thread_ts, answer.session_id)
+                return answer                                          # no pointer suffix — already in a DM
             finally:
                 self._release_lock(thread_ts)
 

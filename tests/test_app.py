@@ -104,6 +104,53 @@ def test_build_orchestrator_with_subscriptions_builds_catalog(tmp_path):
     assert orch._classify_fn is not None
 
 
+def test_build_orchestrator_always_has_personal_store(tmp_path):
+    cfg = tmp_path / "channels.yaml"
+    cfg.write_text(
+        "projects:\n  - name: MyTV\n    owner: Wkkkkk\n    repo: MyTV\n"
+        "    visibility: public\n    channel_id: C123\n    dm: true\n"
+    )
+    orch = build_orchestrator(
+        config_path=str(cfg), db_path=str(tmp_path / "s.db"), secrets=load_secrets(ENV)
+    )
+    assert orch._personal_store is not None
+    assert orch._catalog == ()            # plain pilot: still no catalog, no network
+
+
+def test_build_orchestrator_personal_digest_builds_catalog(tmp_path):
+    cfg = tmp_path / "channels.yaml"
+    cfg.write_text(
+        "projects:\n  - name: MyTV\n    owner: Wkkkkk\n    repo: MyTV\n"
+        "    visibility: public\n    channel_id: C123\n    dm: true\n"
+        "personal_digest:\n  default_cadence: weekly\n  tz: UTC\n"
+    )
+    calls = []
+    def fake_get_json(path):
+        calls.append(path)
+        return {"description": "desc"}
+    orch = build_orchestrator(
+        config_path=str(cfg), db_path=str(tmp_path / "s.db"),
+        secrets=load_secrets(ENV), get_json=fake_get_json,
+    )
+    assert calls == ["/repos/Wkkkkk/MyTV"]
+    assert len(orch._catalog) == 1
+    assert orch._personal_store is not None
+
+
+def test_build_scheduler_includes_personal_digest(tmp_path):
+    cfg_path = tmp_path / "channels.yaml"
+    cfg_path.write_text(
+        "projects:\n  - name: MyTV\n    owner: Wkkkkk\n    repo: MyTV\n"
+        "    visibility: public\n    channel_id: C123\n    dm: true\n"
+        "personal_digest:\n  default_cadence: weekly\n  tz: UTC\n"
+    )
+    config = load_config(cfg_path)
+    sched = build_scheduler(
+        config=config, secrets=load_secrets(ENV), db_path=str(tmp_path / "s.db"), client=object()
+    )
+    assert "PersonalDigestAction" in [type(a).__name__ for a in sched._actions]
+
+
 from babbla.digest.scheduler import ActionScheduler
 from babbla.digest.actions import PerProjectDigestAction, SharedDigestAction, QuizAction
 from babbla.app import build_scheduler

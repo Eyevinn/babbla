@@ -11,3 +11,7 @@ class SlackPoster:
             kwargs["thread_ts"] = thread_ts
         resp = await self._client.chat_postMessage(**kwargs)
         return resp["ts"]
+
+    async def open_dm(self, user_id: str) -> str:
+        resp = await self._client.conversations_open(users=user_id)
+        return resp["channel"]["id"]

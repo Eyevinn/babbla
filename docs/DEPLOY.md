@@ -148,6 +148,21 @@ configured channel (`C0XXXXXXXXX`) and confirm a reply arrives.
 
 ---
 
+### Personal subscriptions (`/babbla`)
+
+To enable the personal-subscription command, add a slash command to the Slack app manifest:
+
+- **Command:** `/babbla`
+- **Usage hint:** `subscribe <project> | unsubscribe <project> | list | digest daily|weekly|off`
+- **Should escape channels/users:** no
+- Requires the `commands` OAuth scope.
+
+Management (`subscribe`/`unsubscribe`/`list`) works as soon as the command is registered.
+The Personal Digest (delivered by DM) additionally requires a `personal_digest:` block in
+`config/channels.yaml` (see the commented example there).
+
+---
+
 ## Auth note: subscription vs. API key
 
 On a developer laptop, Babbla can authenticate to Claude through the **Claude Code CLI
