@@ -325,3 +325,17 @@ async def test_non_subscription_channel_unchanged(store, tmp_path):
     assert recorder == []                                     # subscription router not engaged
     assert runner.calls[0][1].name == "MyTV"
     lobby_store.close()
+
+
+async def test_subscription_stale_sticky_reroutes(store, tmp_path):
+    # Sticky names a project no longer in this subscription -> must re-route.
+    runner = FakeRunner()
+    lobby_store = LobbyThreadStore(str(tmp_path / "l.db"))
+    await lobby_store.put("ts", "Gone")            # not in SUBS_TWO's (MyTV, Secret)
+    recorder = []
+    orch = _sub_orch((PUB, PRIV), SUBS_TWO, runner, store, _classify_returning("MyTV", recorder=recorder), lobby_store)
+    await orch.handle_ask(text="q", thread_ts="ts", channel_id="C900", is_dm=False)
+    assert recorder != []                           # classifier WAS called (re-routed)
+    assert runner.calls[0][1].name == "MyTV"        # routed to classifier's choice
+    assert await lobby_store.get("ts") == "MyTV"    # sticky updated to the new project
+    lobby_store.close()
