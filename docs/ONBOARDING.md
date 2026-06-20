@@ -78,7 +78,7 @@ is reachable on its own channel only (auto-join is a no-op).
 python -m babbla.doctor          # confirms the token can read every configured repo
 ```
 
-- **`babbla doctor`** → the new repo reports `ok`. A private-repo scope miss
+- **`python -m babbla.doctor`** → the new repo reports `ok`. A private-repo scope miss
   shows as `UNREACHABLE … not in token scope?` — go back to step 3.
 - **Ask in the new channel** → a cited answer drawn from the new repo.
 - **Lobby ask** that should route to it → routes (open-tier) or
@@ -87,5 +87,5 @@ python -m babbla.doctor          # confirms the token can read every configured 
   `python -m babbla.digest --once --project <Name>`.
 
 A private-repo token-scope miss otherwise manifests as empty/failed reads at
-this step — which `babbla doctor` now catches up front (and at boot, as a logged
-WARNING).
+this step — which `python -m babbla.doctor` now catches up front (and at boot, as a
+logged WARNING).
