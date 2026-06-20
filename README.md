@@ -25,6 +25,8 @@ This repo is the MyTV Q&A pilot. The post-pilot direction — how Babbla reads a
 from the repo itself (so it needs no central memory service), and the phased plan from
 foundation work to multi-project support — lives in [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
+- [Onboarding a project](docs/ONBOARDING.md) — the repeatable runbook for binding the Nth project.
+
 ## Prerequisites
 
 - Python 3.12+
