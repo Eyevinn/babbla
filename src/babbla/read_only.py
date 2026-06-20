@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
+
+from claude_agent_sdk import HookMatcher
 
 DEFAULT_MODEL = "claude-opus-4-8"
 
@@ -31,6 +34,72 @@ GITHUB_WILDCARD = "mcp__github__*"
 ALLOWED_TOOLS: tuple[str, ...] = (GITHUB_WILDCARD, *AGENTMEMORY_READERS)
 
 
+def _within(path: str, root: str) -> bool:
+    """True iff `path` is inside `root`. Relative paths resolve against `root`
+    (the agent's cwd = the scratch dir), not the host process cwd."""
+    if not path:
+        return False
+    p = Path(path)
+    if not p.is_absolute():
+        p = Path(root) / p
+    try:
+        p.resolve().relative_to(Path(root).resolve())
+        return True
+    except (ValueError, OSError):
+        return False
+
+
+def _pre_tool(decision: str, reason: str) -> dict:
+    return {"hookSpecificOutput": {
+        "hookEventName": "PreToolUse",
+        "permissionDecision": decision,
+        "permissionDecisionReason": reason,
+    }}
+
+
+def make_scratch_guard(scratch: str):
+    """A PreToolUse hook confining a skill's file writes to `scratch`.
+
+    Validated by Task 1 (Option D): under permission_mode="dontAsk", returning
+    permissionDecision="allow" lets an in-scratch Write/Edit/Read through, while
+    "deny" blocks out-of-scratch writes and Bash. Returning {} (no opinion)
+    leaves MCP tools governed by allowed_tools + dontAsk exactly as today, so
+    MCP writers stay denied.
+    """
+    async def guard(input, tool_use_id, context):
+        tool = input.get("tool_name", "")
+        if tool in ("Write", "Edit", "Read"):
+            ti = input.get("tool_input", {})
+            path = ti.get("file_path") or ti.get("path") or ""
+            ok = _within(path, scratch)
+            return _pre_tool("allow" if ok else "deny",
+                             "scratch-scoped" if ok else "outside scratch workspace")
+        if tool == "Bash":
+            return _pre_tool("deny", "bash is not permitted on the skilled path")
+        return {}
+    return guard
+
+
+def skill_loading_kwargs(*, scratch_dir: str, skills: tuple[str, ...]) -> dict:
+    """`ClaudeAgentOptions` kwargs that load ONLY `skills` from a clean scratch
+    workspace headlessly, confine writes to scratch, and leak no Babbla-repo /
+    user-global context. Validated by Task 1.
+
+    - cwd=<scratch> — discovery + writes rooted at the clean temp dir.
+    - setting_sources=["project"] — discover <scratch>/.claude/skills only.
+    - skills=[names] — enable ONLY these (SDK appends Skill(<name>)).
+    - hooks — PreToolUse scratch guard (see make_scratch_guard).
+
+    Caller must stage the skills into <scratch>/.claude/skills/<name>.
+    """
+    return {
+        "cwd": scratch_dir,
+        "setting_sources": ["project"],
+        "skills": list(skills),
+        "hooks": {"PreToolUse": [HookMatcher(hooks=[make_scratch_guard(scratch_dir)])]},
+    }
+
+
 @dataclass(frozen=True)
 class AgentConfig:
     model: str
@@ -38,6 +107,7 @@ class AgentConfig:
     allowed_tools: tuple[str, ...]
     permission_mode: str
     mcp_servers: dict
+    skills: tuple[str, ...] = ()
 
 
 # Digests are summarization, not Q&A: the runner hands over an authoritative,
@@ -127,6 +197,7 @@ def build_agent_config(
     agentmemory_secret: str,
     model: str = DEFAULT_MODEL,
     github_launcher: str = "docker",
+    skills: tuple[str, ...] = (),
 ) -> AgentConfig:
     mcp_servers = {"github": _github_server(github_token, github_launcher)}
     allowed_tools: tuple[str, ...] = (GITHUB_WILDCARD,)
@@ -136,7 +207,8 @@ def build_agent_config(
     return AgentConfig(
         model=model,
         system_prompt=build_system_prompt(owner, repo),
-        allowed_tools=allowed_tools,
+        allowed_tools=allowed_tools,      # builtins are hook-gated, NOT allow-listed
         permission_mode="dontAsk",
         mcp_servers=mcp_servers,
+        skills=skills,
     )

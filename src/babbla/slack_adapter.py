@@ -5,6 +5,7 @@ import logging
 import re
 
 from babbla.blocks import DELETE_ACTION_ID, delete_button_blocks
+from babbla.digest.poster import SlackPoster
 from babbla.orchestrator import Orchestrator
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,16 @@ def _delete_owner(body: dict) -> str:
     return actions[0].get("value") or ""
 
 
+async def _upload_artifacts(client, *, channel: str, thread_ts: str, artifacts) -> None:
+    if not artifacts:
+        return
+    poster = SlackPoster(client)
+    for art in artifacts:
+        await poster.upload_file(
+            channel, filename=art.filename, content=art.data, thread_ts=thread_ts
+        )
+
+
 async def process_ask(
     *,
     text: str,
@@ -54,6 +65,10 @@ async def process_ask(
             channel=channel, ts=ts, text=answer.text,
             blocks=delete_button_blocks(answer.text, owner_id=user_id or ""),
         )
+        await _upload_artifacts(
+            client, channel=channel, thread_ts=thread_ts,
+            artifacts=getattr(answer, "artifacts", ()),
+        )
     except Exception:  # one failed Ask must never crash the process
         logger.exception("Ask failed for thread %s in channel %s", thread_ts, channel)
         await client.chat_update(channel=channel, ts=ts, text=ERROR_TEXT)
@@ -70,6 +85,10 @@ async def process_lobby_ask(
         await client.chat_update(
             channel=channel, ts=ts, text=answer.text,
             blocks=delete_button_blocks(answer.text, owner_id=user_id or ""),
+        )
+        await _upload_artifacts(
+            client, channel=channel, thread_ts=thread_ts,
+            artifacts=getattr(answer, "artifacts", ()),
         )
     except Exception:  # one failed Lobby ask must never crash the process
         logger.exception("Lobby ask failed for thread %s in channel %s", thread_ts, channel)

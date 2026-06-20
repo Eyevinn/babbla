@@ -1,7 +1,11 @@
 # Per-Project Read-Only Skills — Design
 
-**Status:** Approved (brainstorming)
+**Status:** Approved (brainstorming) — plan written; V1/V2 validated live (see plan Task 1)
 **Date:** 2026-06-20
+**Plan:** [Per-Project Read-Only Skills Implementation Plan](../plans/2026-06-20-per-project-skills-plan.md)
+**Note:** the design's "scratch-scoped `Write/Edit/Bash` under `dontAsk`" was found not to work; the
+validated mechanism is `dontAsk` + a `PreToolUse` hook that confines writes to the scratch dir (and denies
+`Bash`). See the plan's Task 1 / ADR 0015.
 **Builds on:** [Always-on Babbla](2026-06-18-always-on-babbla-design.md) (the Agent-SDK runtime + tool surface),
 [MyTV Q&A pilot](2026-06-18-mytv-qa-pilot-design.md) (the read-only answering path)
 **Related:** [ADR 0003 — read-only by construction](../../adr/0003-read-only-by-construction.md),

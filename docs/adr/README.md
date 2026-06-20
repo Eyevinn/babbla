@@ -33,10 +33,15 @@ Format is lightweight [Nygard-style](https://cognitect.com/blog/2011/11/15/docum
 | [0011](0011-always-on-container-hosting.md) | Always-on container hosting | Accepted |
 | [0012](0012-digest-anchor-sourcing.md) | Digest anchor sourcing via per-project branch/deploy config | Accepted |
 | [0013](0013-thread-scoped-conversation-sessions.md) | Thread-scoped conversation sessions via Slack `thread_ts` | Accepted |
+| [0014](0014-private-repo-token-access.md) | GitHub token may read specific private/internal repos for onboarding | Accepted |
+| [0015](0015-skilled-answer-path.md) | Skilled answer path — bounded read-only loosening for artifacts | Accepted |
 
 ADRs 0001–0008 were decided on 2026-06-18 and written from the design proposal
 ([`../PROPOSAL-design.md`](../PROPOSAL-design.md)). ADRs 0009–0010 capture the
 organizing principle adopted the same day (see [`../ROADMAP.md`](../ROADMAP.md)).
 ADRs 0011–0012 close out Phase 3 (always-on container + scheduled digest anchors).
 ADR 0013 documents the thread-scoped conversation model, confirmed during Phase 4
-live smoke testing (2026-06-19).
+live smoke testing (2026-06-19). ADR 0014 establishes that the fine-grained GitHub
+token may be extended to specific private/internal repos for onboarding. ADR 0015
+defines the skilled answer path — a bounded, read-only loosening that lets project
+bindings opt into per-thread scratch-based artifact production.

@@ -49,6 +49,7 @@ def load_secrets(env: Mapping[str, str]) -> Secrets:
         agentmemory_secret=env.get("AGENTMEMORY_SECRET", ""),
         model=env.get("BABBLA_MODEL", DEFAULT_MODEL),
         github_launcher=env.get("BABBLA_GITHUB_MCP", "docker"),
+        skills_pool=env.get("BABBLA_SKILLS_POOL", "config/skills"),
     )
 
 

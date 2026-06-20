@@ -266,3 +266,16 @@ def test_run_preflight_swallows_get_json_errors(tmp_path, caplog):
         checks = run_preflight(config, get_json=gj, env={})
 
     assert all(not c.reachable for c in checks)   # nothing raised out of run_preflight
+
+
+def test_load_secrets_default_skills_pool():
+    from babbla.app import load_secrets
+    env = {"SLACK_BOT_TOKEN": "x", "SLACK_APP_TOKEN": "y", "GITHUB_TOKEN": "z"}
+    assert load_secrets(env).skills_pool == "config/skills"
+
+
+def test_load_secrets_skills_pool_override():
+    from babbla.app import load_secrets
+    env = {"SLACK_BOT_TOKEN": "x", "SLACK_APP_TOKEN": "y", "GITHUB_TOKEN": "z",
+           "BABBLA_SKILLS_POOL": "/srv/pool"}
+    assert load_secrets(env).skills_pool == "/srv/pool"

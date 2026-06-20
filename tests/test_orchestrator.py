@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from babbla.agent_runner import CitedAnswer
+from babbla.agent_runner import Artifact, CitedAnswer
 from babbla.config import Config, ProjectBinding
 from babbla.orchestrator import Orchestrator, UnknownSurfaceError
 from babbla.session_store import SessionStore
@@ -16,7 +16,7 @@ class FakeRunner:
         self.calls = []
         self.next_session = "sess-1"
 
-    async def run_ask(self, text, binding, resume_session_id):
+    async def run_ask(self, text, binding, resume_session_id, *, scratch_key=None):
         self.calls.append((text, binding, resume_session_id))
         return CitedAnswer(text=f"answer to {text}", session_id=self.next_session)
 
@@ -67,7 +67,7 @@ async def test_per_thread_lock_serializes(store):
     binding = BINDING
 
     class SlowRunner:
-        async def run_ask(self, text, binding, resume_session_id):
+        async def run_ask(self, text, binding, resume_session_id, *, scratch_key=None):
             order.append(("start", text, resume_session_id))
             await asyncio.sleep(0.01)
             order.append(("end", text))
@@ -103,7 +103,7 @@ async def test_concurrent_asks_in_one_thread_share_one_lock(store):
     order = []
 
     class SlowRunner:
-        async def run_ask(self, text, binding, resume_session_id):
+        async def run_ask(self, text, binding, resume_session_id, *, scratch_key=None):
             order.append(len(orch._locks))
             await asyncio.sleep(0.01)
             return CitedAnswer(text=f"a-{text}", session_id="sess-1")
@@ -469,3 +469,38 @@ async def test_dispatch_topic_remove_idempotent(store, psub):
         "topic-remove", project="MyTV", name="security"))
     assert "security" in reply
     assert await psub.topics_for("U1") == {}
+
+
+# ---------------------------------------------------------------------------
+# scratch_key + artifact preservation tests
+# ---------------------------------------------------------------------------
+
+
+class ArtifactRunner:
+    def __init__(self):
+        self.scratch_keys = []
+
+    async def run_ask(self, text, binding, resume_session_id, *, scratch_key=None):
+        self.scratch_keys.append(scratch_key)
+        return CitedAnswer(text="drew it", session_id="s1",
+                           artifacts=(Artifact("architecture.html", b"<svg/>"),))
+
+
+async def test_handle_ask_passes_thread_ts_as_scratch_key(store):
+    runner = ArtifactRunner()
+    orch = Orchestrator(CONFIG, runner, store)
+    ans = await orch.handle_ask(text="draw", thread_ts="t1", channel_id="C123", is_dm=False)
+    assert ans.artifacts and ans.artifacts[0].filename == "architecture.html"
+    assert runner.scratch_keys == ["t1"]        # thread_ts threaded through as scratch_key
+
+
+async def test_lobby_ask_preserves_artifacts_and_scratch_key(store, tmp_path):
+    runner = ArtifactRunner()
+    entry = CatalogEntry(BINDING, None)         # (binding, description) — matches build_catalog
+    lobby_store = LobbyThreadStore(str(tmp_path / "lobby.db"))
+    await lobby_store.put("t1", BINDING.name)   # sticky → deterministic route, no classifier call
+    orch = Orchestrator(CONFIG, runner, store, catalog=(entry,), lobby_store=lobby_store)
+    ans = await orch.handle_lobby_ask(text="draw", thread_ts="t1")
+    assert ans.artifacts and ans.artifacts[0].filename == "architecture.html"
+    assert runner.scratch_keys == ["t1"]
+    lobby_store.close()

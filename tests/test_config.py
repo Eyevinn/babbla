@@ -259,3 +259,28 @@ def test_adr_bindings_requires_channel(tmp_path):
     assert tuple(b.name for b in cfg.adr_bindings()) == ("MyTV",)
     text = ADR_FIXTURE.replace("channel_id: C123", "channel_id: null")
     assert load_config(_write(tmp_path, text)).adr_bindings() == ()
+
+
+def _make_pool(tmp_path: Path, *names: str) -> None:
+    for n in names:
+        d = tmp_path / "skills" / n
+        d.mkdir(parents=True)
+        (d / "SKILL.md").write_text("---\nname: %s\ndescription: x\n---\n" % n)
+
+
+def test_skills_parse_to_tuple(tmp_path):
+    _make_pool(tmp_path, "architecture-diagram")
+    text = FIXTURE + "    skills:\n      - architecture-diagram\n"
+    cfg = load_config(_write(tmp_path, text))
+    assert cfg.bindings[0].skills == ("architecture-diagram",)
+
+
+def test_skills_absent_is_empty_tuple(tmp_path):
+    cfg = load_config(_write(tmp_path, FIXTURE))
+    assert cfg.bindings[0].skills == ()
+
+
+def test_unknown_skill_raises(tmp_path):
+    text = FIXTURE + "    skills:\n      - nope\n"
+    with pytest.raises(ValueError, match="unknown skill 'nope'"):
+        load_config(_write(tmp_path, text))
