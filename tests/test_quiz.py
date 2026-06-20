@@ -31,6 +31,9 @@ from babbla.digest.actions import QuizAction
 
 NOW = datetime(2026, 6, 19, 12, tzinfo=timezone.utc)
 
+# Deterministic branded lead-in QuizAction prepends to the questions (count 3, slug Wkkkkk/MyTV).
+QLEAD = "Here's a quick 3-question quiz on *Wkkkkk/MyTV*"
+
 
 class FakeTimer:
     def __init__(self, last): self._last = last; self.advanced = []
@@ -65,8 +68,8 @@ async def test_quiz_due_posts_questions_then_answers_in_thread(monkeypatch):
     action, timer, runner, poster = _quiz_action(None, "Q1?\n===ANSWERS===\nA1", monkeypatch)
     await action.maybe_run(NOW)
     assert poster.posts == [
-        ("C0XXXXXXXXX", "Q1?", None),
-        ("C0XXXXXXXXX", "A1", "TS1"),       # answers threaded under the questions ts
+        ("C0XXXXXXXXX", f"{QLEAD}\n\nQ1?", None),   # branded lead-in + questions
+        ("C0XXXXXXXXX", "A1", "TS1"),       # answers threaded under the questions ts (no lead-in)
     ]
     assert timer.advanced == [("quiz:MyTV", NOW.timestamp())]
 
@@ -74,7 +77,7 @@ async def test_quiz_due_posts_questions_then_answers_in_thread(monkeypatch):
 async def test_quiz_without_delimiter_posts_questions_only(monkeypatch):
     action, timer, runner, poster = _quiz_action(None, "just questions, no answers", monkeypatch)
     await action.maybe_run(NOW)
-    assert poster.posts == [("C0XXXXXXXXX", "just questions, no answers", None)]
+    assert poster.posts == [("C0XXXXXXXXX", f"{QLEAD}\n\njust questions, no answers", None)]
     assert timer.advanced == [("quiz:MyTV", NOW.timestamp())]
 
 

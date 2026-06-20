@@ -51,8 +51,11 @@ class PerProjectDigestAction:
         if changes:
             text = await self._runner.summarize(self._b, changes, head, topic=self._b.digest.topic)
             if text.strip():
+                slug = f"{self._b.owner}/{self._b.repo}"
+                lead = f"Here's a {self._b.digest.cadence} update summary on *{slug}*"
+                full = f"{lead}\n\n{text}"
                 await self._poster.post(
-                    self._b.channel_id, text, blocks=delete_button_blocks(text)
+                    self._b.channel_id, full, blocks=delete_button_blocks(full)
                 )
         await self._store.advance(self._b.channel_id, head, now.timestamp())
 
@@ -152,7 +155,9 @@ class QuizAction:
             return
         text = await self._runner.generate(self._b, self._count)
         questions, _, answers = text.partition("===ANSWERS===")
-        ts = await self._poster.post(self._b.channel_id, questions.strip())
+        slug = f"{self._b.owner}/{self._b.repo}"
+        lead = f"Here's a quick {self._count}-question quiz on *{slug}*"
+        ts = await self._poster.post(self._b.channel_id, f"{lead}\n\n{questions.strip()}")
         if answers.strip():
             await self._poster.post(self._b.channel_id, answers.strip(), thread_ts=ts)
         await self._timer.advance(self._key, now.timestamp())

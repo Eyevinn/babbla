@@ -55,6 +55,9 @@ def _action(binding, state, *, head, changes, monkeypatch):
 
 NOW = datetime(2026, 6, 18, 12, tzinfo=timezone.utc)
 
+# Deterministic branded lead-in PerProjectDigestAction prepends (cadence "weekly", slug o/r).
+DLEAD = "Here's a weekly update summary on *o/r*"
+
 
 async def test_not_due_does_nothing(monkeypatch):
     action, store, runner, poster = _action(
@@ -70,7 +73,7 @@ async def test_first_run_branch_posts_window_and_sets_watermark(monkeypatch):
         changes=[Change("c1", "feat: a (#1)", 1)], monkeypatch=monkeypatch)
     await action.maybe_run(NOW)
     assert runner.calls == [("MyTV", ["c1"], "H")]
-    assert poster.posts == [("C0XXXXXXXXX", "digest:H")]
+    assert poster.posts == [("C0XXXXXXXXX", f"{DLEAD}\n\ndigest:H")]
     assert store.advanced == [("C0XXXXXXXXX", "H", NOW.timestamp())]
 
 
@@ -100,7 +103,7 @@ async def test_due_and_new_posts_range(monkeypatch):
         changes=[Change("c2", "fix: b", None)], monkeypatch=monkeypatch)
     await action.maybe_run(NOW)
     assert runner.calls == [("MyTV", ["c2"], "new")]
-    assert poster.posts == [("C0XXXXXXXXX", "digest:new")]
+    assert poster.posts == [("C0XXXXXXXXX", f"{DLEAD}\n\ndigest:new")]
     assert store.advanced == [("C0XXXXXXXXX", "new", NOW.timestamp())]
 
 
