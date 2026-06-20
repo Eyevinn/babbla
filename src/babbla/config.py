@@ -44,6 +44,13 @@ class StalePRConfig:
 
 
 @dataclass(frozen=True)
+class AdrConfig:
+    cadence: str          # daily | weekly
+    tz: str
+    dir: str = "docs/adr"
+
+
+@dataclass(frozen=True)
 class ProjectBinding:
     name: str
     owner: str
@@ -54,6 +61,7 @@ class ProjectBinding:
     digest: DigestConfig | None = None
     quiz: QuizConfig | None = None
     stale_prs: "StalePRConfig | None" = None
+    adr: "AdrConfig | None" = None
 
 
 @dataclass(frozen=True)

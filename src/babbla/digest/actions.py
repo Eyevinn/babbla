@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timedelta
 
 from babbla.access import is_open_tier
@@ -198,3 +199,50 @@ class StalePRAction:
         if len(prs) > self._MAX:
             lines.append(f"…and {len(prs) - self._MAX} more")
         return "\n".join(lines)
+
+
+_ADR_RE = re.compile(r"^\d{4}-.*\.md$")
+
+
+class AdrOfWeekAction:
+    def __init__(self, binding, timer, cursor, get_json, runner, poster,
+                 cadence: str, tz: str, dir: str) -> None:
+        self._b = binding
+        self._timer = timer
+        self._cursor = cursor
+        self._get_json = get_json
+        self._runner = runner
+        self._poster = poster
+        self._cadence = cadence
+        self._tz = tz
+        self._dir = dir
+        self._key = f"adr:{binding.name}"
+        self.project = binding.name
+        self.label = self._key
+
+    async def maybe_run(self, now: datetime) -> None:
+        last = await self._timer.get(self._key)
+        if not is_due(now, last, self._cadence, self._tz):
+            return
+        entries = self._get_json(f"/repos/{self._b.owner}/{self._b.repo}/contents/{self._dir}")
+        names = sorted(
+            e["name"] for e in (entries or []) if _ADR_RE.match(e.get("name", ""))
+        )
+        if not names:
+            # No ADRs (or no docs/adr): stay quiet, but advance so we check once per period.
+            await self._timer.advance(self._key, now.timestamp())
+            return
+        chosen = self._next(names, await self._cursor.get(self._key))
+        # Teaser failure raises here -> scheduler catches it -> cursor/timer NOT advanced
+        # -> retries the same ADR next tick.
+        text = await self._runner.teaser(self._b, f"{self._dir}/{chosen}")
+        await self._poster.post(self._b.channel_id, text)
+        await self._cursor.set(self._key, chosen)
+        await self._timer.advance(self._key, now.timestamp())
+
+    @staticmethod
+    def _next(names: list[str], cursor: str | None) -> str:
+        # Next ADR after the cursor; wrap to first when cursor is last, absent, or stale.
+        if cursor in names:
+            return names[(names.index(cursor) + 1) % len(names)]
+        return names[0]
