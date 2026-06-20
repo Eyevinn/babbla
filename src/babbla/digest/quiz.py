@@ -12,7 +12,8 @@ class QuizRunner:
         prompt = (
             f"Create a short Slack quiz of {count} questions to test a colleague's knowledge of the "
             f"project {slug}. Draw the questions from the project's README, docs/, ADRs, and notable "
-            f"history. Number the questions. After the last question, output a line containing exactly "
+            f"history. Number the questions. Output only the numbered questions — no preamble, "
+            f"intro line, or title. After the last question, output a line containing exactly "
             f"===ANSWERS=== and then the numbered answers. Keep it concise and Slack-friendly."
         )
         answer = await self._agent.run_ask(prompt, binding, None)

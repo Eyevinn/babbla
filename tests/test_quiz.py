@@ -24,6 +24,7 @@ async def test_quiz_runner_builds_prompt_and_returns_text():
     assert "Wkkkkk/MyTV" in p
     assert "3" in p
     assert "===ANSWERS===" in p
+    assert "preamble" in p.lower()          # told to omit its own intro/title (action adds the lead-in)
 
 
 from datetime import datetime, timedelta, timezone
