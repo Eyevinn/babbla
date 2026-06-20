@@ -32,7 +32,7 @@ Three commitments shape everything below:
    thinner answers, never failure (graceful degradation).
 
 **Babbla is a thin connector** — Slack ↔ an agent runtime (Claude today, possibly Copilot
-later) — plus a read-only GitHub path and a small SQLite session store. It is not the memory
+or Codex later) — plus a read-only GitHub path and a small SQLite session store. It is not the memory
 and not the projects.
 
 ## The "known wall" — resolved by dissolving it
@@ -139,8 +139,76 @@ lobby channel / subscription / digest / quiz is set in `config/channels.yaml`).
   deferred. (`…/2026-06-19-topics-design.md`)
 
 Also deferred from the scheduled-actions slice: quiz scoring/per-user state,
-more action types (ADR-of-the-week, stale-PR nudge), summary customisation (per-digest `audience`
-field), and a skill-based-summary spike (needs a headless-SDK skill-loading investigation).
+more action types (ADR-of-the-week, stale-PR nudge), and summary customisation (per-digest
+`audience` field). The skill-based-summary spike's blocker — the headless-SDK skill-loading
+investigation — is now **resolved** (see Phase 5; live-validated on `claude-opus-4-8`), but
+skills on the *digest/quiz* path stay out of scope: the skilled branch fires only when a
+`scratch_key` (a thread) is supplied, and digest/quiz/adr runs pass none ([ADR 0015](adr/0015-skilled-answer-path.md)).
+
+### Phase 5 — Per-project read-only skills (artifacts on the Ask path)
+
+Some valuable per-project work is skill-shaped — *draw an architecture diagram*, *write a
+document* — and must **produce a file**, which the locked read-only tool surface ([ADR 0003](adr/0003-read-only-by-construction.md))
+forbids. Phase 5 defines read-only precisely and bounds exactly one loosening so Babbla can run
+skills and return artifacts **without ever mutating the subject repo**. Decomposed into
+independent slices, each with its own spec→plan→build cycle; all built and merged to `main`.
+(`docs/superpowers/specs/2026-06-18-readonly-skills-design.md`,
+`…/2026-06-20-per-project-skills-design.md`, [ADR 0015](adr/0015-skilled-answer-path.md).)
+
+- [x] **Define read-only precisely; bound one loosening.** "Read-only" = no mutation of the
+  subject GitHub repo (server stays `GITHUB_READ_ONLY=1`) and no agentmemory writes — unchanged.
+  The loosening: a binding may declare `skills:`, and on the **interactive Ask path only** the run
+  gets a per-thread **scratch dir** (derived from `thread_ts`, wiped + recreated each ask, cleaned
+  in a `finally`, living outside any repo). Digest/quiz/adr runs pass no `scratch_key` and never
+  take the skilled branch.
+- [x] **Enforce the write surface with a hook, not allow-listing.** `permission_mode` stays
+  `dontAsk`; a `PreToolUse` hook (`src/babbla/read_only.py`) returns `allow` for
+  `Write`/`Edit`/`Read` resolving **inside** the scratch dir, `deny` outside and for `Bash`, and no
+  opinion elsewhere (so `dontAsk` still governs the denied MCP writers). Live smokes ruled out
+  `bypassPermissions`, `acceptEdits`, and `dontAsk`+allow-listed writes as unsafe or non-functional.
+- [x] **Babbla-controlled pool, never the subject repo.** Skills load only from `config/skills/`
+  (vetted, read-only) via the SDK's `ClaudeAgentOptions.skills=[names]`, staged into
+  `<scratch>/.claude/skills/` with `setting_sources=["project"]` so no Babbla-repo or user-global
+  context leaks. Seeded with `architecture-diagram` + `onboarding-guide`.
+- [x] **Artifacts back to Slack.** Generated files upload threaded under the answer (needs the
+  Slack `files:write` scope; missing it degrades to a logged no-op, never a failed ask).
+- [x] **Resume-safe + Docker-portable + preflighted.** The scratch path is stable per thread (not
+  per request) so the CLI's cwd-keyed transcripts still resume; skills add no new runtime and ride
+  the same SDK→CLI path. A `babbla-doctor` / boot preflight (`check_skills`, `run_skills_preflight`)
+  verifies every bound skill is stageable from the *runtime* pool (`BABBLA_SKILLS_POOL`), closing
+  the gap where the config-dir and deploy-time pools diverge (`09e8c2a`).
+
+### Phase 6 — Pluggable agent runtime + model/effort config (operationalizes ADR 0002)
+
+[ADR 0002](adr/0002-runtime-agnostic-via-mcp.md) decided Babbla should be runtime-agnostic by
+routing all capability through MCP; this phase turns that decision into actual support for more
+than one runtime — Claude today, **Copilot or Codex** next — plus the config surface to tune
+whichever runtime is active. The capability layer is already portable (each MCP server is just a
+subprocess spec another runtime launches identically); the only real coupling left is the runtime
+call itself.
+
+- [ ] **Pluggable runtime — Claude / Copilot / (possibly) Codex.** The runtime is injected today
+  as `query_fn` (defaults to `claude_agent_sdk.query`) at three call-sites — `AgentRunner`
+  (`src/babbla/agent_runner.py`), the lobby classifier (`src/babbla/lobby.py:68`), and the
+  personal-intent classifier (`src/babbla/personal.py:86`). The injection seam exists, but
+  options-building (`ClaudeAgentOptions`, three places) and message-draining
+  (`_extract_text`/`_drain`, `agent_runner.py:66`) are Claude-SDK-shaped. Define one thin runtime
+  adapter (build-options → run → extract text/session-id) so swapping runtime is a config flip,
+  not a re-architecture. The hard parts to port are exactly the ones ADR 0002 flagged as "once the
+  headless/read-only story matures": `permission_mode="dontAsk"`, the `PreToolUse` scratch-guard
+  hook (`src/babbla/read_only.py`), skill loading (`setting_sources`/`skills`), and session resume
+  (the Claude CLI scopes sessions by cwd). A plain-Q&A-only runtime is far simpler than the
+  full-feature skilled path — stage it (Q&A first, skilled path once a runtime supports the hook
+  surface). Read-only-ness itself survives the swap: it's enforced server-side
+  (`GITHUB_READ_ONLY=1`), not by the runtime.
+- [ ] **Configurable model + effort.** Model is already one global env var (`BABBLA_MODEL`,
+  default `claude-opus-4-8`); **effort/thinking is not configurable** — Babbla sets none of the
+  SDK's `effort` / `thinking` / `max_thinking_tokens` knobs, so it runs at the runtime's default.
+  Expose effort (and consider `fallback_model`, `max_turns`, and a budget cap) through env/config,
+  centralizing the options build so the three call-sites don't drift. Optional follow-on:
+  per-project or per-surface model/effort — e.g. a cheap, low-effort model for the lobby/intent
+  classifiers and a stronger one for Asks — natural since the classifiers are already separate
+  call-sites.
 
 ## Open questions
 
