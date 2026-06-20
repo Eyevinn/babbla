@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import shutil
 from dataclasses import dataclass
+from pathlib import Path
 
 from claude_agent_sdk import ClaudeAgentOptions, query as _sdk_query
 
@@ -9,9 +11,16 @@ from babbla.read_only import DEFAULT_MODEL, build_agent_config
 
 
 @dataclass(frozen=True)
+class Artifact:
+    filename: str
+    data: bytes
+
+
+@dataclass(frozen=True)
 class CitedAnswer:
     text: str
     session_id: str | None
+    artifacts: tuple[Artifact, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -21,6 +30,27 @@ class Secrets:
     agentmemory_secret: str
     model: str = DEFAULT_MODEL
     github_launcher: str = "docker"
+    skills_pool: str = "config/skills"
+
+
+def _stage_skills(pool: str, names: tuple[str, ...], scratch: str) -> None:
+    dest_root = Path(scratch) / ".claude" / "skills"
+    dest_root.mkdir(parents=True, exist_ok=True)
+    for name in names:
+        shutil.copytree(Path(pool) / name, dest_root / name)
+
+
+def _collect_artifacts(scratch: str) -> tuple[Artifact, ...]:
+    root = Path(scratch)
+    out: list[Artifact] = []
+    for p in sorted(root.rglob("*")):
+        if not p.is_file():
+            continue
+        rel = p.relative_to(root)
+        if any(part.startswith(".") for part in rel.parts):
+            continue  # skips <scratch>/.claude/skills/* (staged skills) and dotfiles
+        out.append(Artifact(filename=p.name, data=p.read_bytes()))
+    return tuple(out)
 
 
 def _extract_text(message) -> str | None:
