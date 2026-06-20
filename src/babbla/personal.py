@@ -166,7 +166,10 @@ def render_private_refused(name: str) -> str:
 
 def render_list(names: Sequence[str], cadence: str) -> str:
     if not names:
-        return "You don't follow any projects yet. Use `/babbla subscribe <project>` to start."
+        return (
+            "You don't follow any projects yet. Just tell me in a DM — e.g. "
+            '"subscribe to MyTV" or "follow MyTV" — to start.'
+        )
     listing = ", ".join(f"*{n}*" for n in names)
     cad = "paused" if cadence == "off" else cadence
     return f"You follow: {listing}.\nPersonal digest: *{cad}*."
@@ -180,11 +183,12 @@ def render_digest_set(cadence: str) -> str:
 
 def render_help() -> str:
     return (
-        "*Personal subscriptions* — manage what I follow for you:\n"
-        "• `/babbla subscribe <project>` — follow a project\n"
-        "• `/babbla unsubscribe <project>` — stop following\n"
-        "• `/babbla list` — show your projects and digest cadence\n"
-        "• `/babbla digest daily|weekly|off` — set your personal-digest cadence"
+        "*Personal subscriptions* — just tell me in a DM, in plain language:\n"
+        '• "follow MyTV" / "subscribe me to MyTV" — follow a project\n'
+        '• "stop following MyTV" / "mute MyTV" — stop following\n'
+        '• "what am I following?" — show your projects and digest cadence\n'
+        '• "make my digest daily" / "pause my digest" — set your digest cadence\n'
+        '• "only show me security in MyTV" — filter a project\'s digest to a topic'
     )
 
 

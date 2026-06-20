@@ -59,7 +59,15 @@ def test_render_list_with_and_without_subs():
     assert "MyTV" in personal.render_list(["MyTV"], "weekly")
     assert "weekly" in personal.render_list(["MyTV"], "weekly")
     assert "paused" in personal.render_list(["MyTV"], "off")
-    assert "subscribe" in personal.render_list([], "weekly").lower()
+    empty = personal.render_list([], "weekly")
+    assert "subscribe" in empty.lower()
+    assert "/babbla" not in empty          # managed via plain-language DM, not a slash command
+
+
+def test_render_help_is_plain_language_not_slash_command():
+    out = personal.render_help()
+    assert "/babbla" not in out
+    assert "subscribe" in out.lower()
 
 
 def test_render_private_and_unknown():
