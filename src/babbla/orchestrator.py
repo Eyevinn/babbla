@@ -135,7 +135,7 @@ class Orchestrator:
         try:
             async with self._lock_for(thread_ts):
                 resume_session_id = await self._store.get_session(thread_ts)
-                answer = await self._runner.run_ask(text, binding, resume_session_id)
+                answer = await self._runner.run_ask(text, binding, resume_session_id, scratch_key=thread_ts)
                 if answer.session_id:
                     await self._store.put_session(thread_ts, answer.session_id)
             return answer
@@ -166,7 +166,7 @@ class Orchestrator:
                     return CitedAnswer(text=decision.pointer, session_id=None)
                 await self._lobby_store.put(thread_ts, entry.binding.name)
                 resume = await self._store.get_session(thread_ts)
-                answer = await self._runner.run_ask(text, entry.binding, resume)
+                answer = await self._runner.run_ask(text, entry.binding, resume, scratch_key=thread_ts)
                 if answer.session_id:
                     await self._store.put_session(thread_ts, answer.session_id)
                 return answer                                          # no pointer suffix — already in a DM
@@ -193,12 +193,13 @@ class Orchestrator:
                     return CitedAnswer(text=decision.pointer, session_id=None)
                 await self._lobby_store.put(thread_ts, entry.binding.name)
                 resume = await self._store.get_session(thread_ts)
-                answer = await self._runner.run_ask(text, entry.binding, resume)
+                answer = await self._runner.run_ask(text, entry.binding, resume, scratch_key=thread_ts)
                 if answer.session_id:
                     await self._store.put_session(thread_ts, answer.session_id)
                 return CitedAnswer(
                     text=answer.text + lobby.pointer_suffix(entry),
                     session_id=answer.session_id,
+                    artifacts=answer.artifacts,
                 )
             finally:
                 self._release_lock(thread_ts)
