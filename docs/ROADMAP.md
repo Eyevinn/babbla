@@ -89,6 +89,10 @@ cycle when reached.
   onboarding the second spine project (the internal service). _(Done: `python -m babbla.audit`
   / `audit-repo.sh`; see `docs/superpowers/specs/2026-06-18-audit-repo-design.md`.)_
 
+  The repeatable onboarding procedure is documented in
+  [`ONBOARDING.md`](ONBOARDING.md) (audit → visibility → token → binding → channel
+  → lobby → verify), with a `python -m babbla.doctor` read-access preflight.
+
 ### Phase 3 — Always-on Babbla (the infra remnant of the wall)
 
 - [x] Host the thin connector on a server so a sleeping laptop no longer drops

@@ -1,6 +1,8 @@
+import logging
+
 import pytest
 
-from babbla.app import build_orchestrator, load_secrets
+from babbla.app import build_orchestrator, load_secrets, run_preflight
 from babbla.orchestrator import Orchestrator
 
 ENV = {
@@ -213,3 +215,54 @@ def test_build_scheduler_inert_includes_no_new_actions(tmp_path):
     names = [type(a).__name__ for a in sched._actions]
     assert "StalePRAction" not in names and "AdrDigestAction" not in names
     assert sched._actions == ()
+
+
+# ---------------------------------------------------------------------------
+# run_preflight tests
+# ---------------------------------------------------------------------------
+
+def _cfg_two(tmp_path):
+    cfg = tmp_path / "channels.yaml"
+    cfg.write_text(
+        "projects:\n"
+        "  - name: MyTV\n    owner: Wkkkkk\n    repo: MyTV\n"
+        "    visibility: public\n    channel_id: C1\n    dm: true\n"
+        "  - name: Secret\n    owner: Eyevinn\n    repo: secret\n"
+        "    visibility: private\n    channel_id: C2\n    dm: false\n"
+    )
+    return load_config(str(cfg))
+
+
+def test_run_preflight_warns_for_unreachable_and_does_not_raise(tmp_path, caplog):
+    config = _cfg_two(tmp_path)
+
+    def gj(path):
+        return {"x": 1} if "MyTV" in path else None   # Secret unreachable
+
+    with caplog.at_level(logging.WARNING):
+        checks = run_preflight(config, get_json=gj, env={})
+
+    assert [c.reachable for c in checks] == [True, False]
+    assert "Eyevinn/secret" in caplog.text
+    assert "MyTV" not in caplog.text   # reachable repos do not warn
+
+
+def test_run_preflight_skipped_does_not_call_get_json(tmp_path):
+    config = _cfg_two(tmp_path)
+
+    def boom(path):
+        raise AssertionError("get_json must not be called when skipped")
+
+    assert run_preflight(config, get_json=boom, env={"BABBLA_SKIP_PREFLIGHT": "1"}) is None
+
+
+def test_run_preflight_swallows_get_json_errors(tmp_path, caplog):
+    config = _cfg_two(tmp_path)
+
+    def gj(path):
+        raise RuntimeError("network down")
+
+    with caplog.at_level(logging.WARNING):
+        checks = run_preflight(config, get_json=gj, env={})
+
+    assert all(not c.reachable for c in checks)   # nothing raised out of run_preflight
