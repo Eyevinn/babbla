@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import hashlib
+import os
 import shutil
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
 from claude_agent_sdk import ClaudeAgentOptions, query as _sdk_query
 
 from babbla.config import ProjectBinding
-from babbla.read_only import DEFAULT_MODEL, build_agent_config
+from babbla.read_only import DEFAULT_MODEL, build_agent_config, skill_loading_kwargs
 
 
 @dataclass(frozen=True)
@@ -31,6 +34,15 @@ class Secrets:
     model: str = DEFAULT_MODEL
     github_launcher: str = "docker"
     skills_pool: str = "config/skills"
+
+
+def _scratch_path(scratch_key: str) -> str:
+    """A STABLE scratch dir path for a conversation thread. Keyed by scratch_key
+    (the thread_ts) so a thread's turns share one cwd — required for session
+    resume, which the CLI scopes by cwd path. Lives under $TMPDIR (honor a
+    writable tmpfs in containers)."""
+    digest = hashlib.sha1(scratch_key.encode()).hexdigest()[:16]
+    return os.path.join(tempfile.gettempdir(), f"babbla-skill-{digest}")
 
 
 def _stage_skills(pool: str, names: tuple[str, ...], scratch: str) -> None:
@@ -75,7 +87,7 @@ class AgentRunner:
 
     async def run_ask(
         self, text: str, binding: ProjectBinding, resume_session_id: str | None,
-        *, system_prompt: str | None = None,
+        *, system_prompt: str | None = None, scratch_key: str | None = None,
     ) -> CitedAnswer:
         cfg = build_agent_config(
             owner=binding.owner,
@@ -85,17 +97,34 @@ class AgentRunner:
             agentmemory_secret=self._secrets.agentmemory_secret,
             model=self._secrets.model,
             github_launcher=self._secrets.github_launcher,
+            skills=binding.skills,
         )
+        # The skilled branch needs a STABLE per-thread scratch path so session
+        # resume works (the CLI scopes sessions by cwd — a fresh random cwd each
+        # turn crashes resume with "No conversation found"). It fires only when a
+        # scratch_key is supplied, which the interactive Ask paths pass as the
+        # thread_ts; digest/quiz/adr callers pass none, so they NEVER go skilled
+        # (digest-path skills stay out of scope).
+        if cfg.skills and scratch_key is not None:
+            return await self._run_skilled(
+                cfg, text, binding, resume_session_id, system_prompt, scratch_key
+            )
+        return await self._run_plain(cfg, text, binding, resume_session_id, system_prompt)
+
+    def _base_options(self, cfg, system_prompt, resume_session_id, **extra) -> ClaudeAgentOptions:
         options = ClaudeAgentOptions(
             model=cfg.model,
             system_prompt=system_prompt or cfg.system_prompt,
             allowed_tools=list(cfg.allowed_tools),
             permission_mode=cfg.permission_mode,
             mcp_servers=cfg.mcp_servers,
+            **extra,
         )
         if resume_session_id:
             options.resume = resume_session_id
+        return options
 
+    async def _drain(self, options, text, resume_session_id):
         last_text: str | None = None
         session_id: str | None = resume_session_id
         async for message in self._query(prompt=text, options=options):
@@ -105,9 +134,40 @@ class AgentRunner:
             sid = getattr(message, "session_id", None)
             if sid:
                 session_id = sid
+        return last_text, session_id
 
-        fallback = f"I don't know — I couldn't find anything in {binding.name}'s history."
-        return CitedAnswer(
-            text=last_text or fallback,
-            session_id=session_id,
-        )
+    def _fallback(self, binding) -> str:
+        return f"I don't know — I couldn't find anything in {binding.name}'s history."
+
+    async def _run_plain(self, cfg, text, binding, resume_session_id, system_prompt) -> CitedAnswer:
+        options = self._base_options(cfg, system_prompt, resume_session_id)
+        last_text, session_id = await self._drain(options, text, resume_session_id)
+        return CitedAnswer(text=last_text or self._fallback(binding), session_id=session_id)
+
+    async def _run_skilled(
+        self, cfg, text, binding, resume_session_id, system_prompt, scratch_key
+    ) -> CitedAnswer:
+        # Deterministic per-thread path (NOT mkdtemp): turn N+1 must reuse the
+        # same cwd as turn N or resume crashes. Wipe + recreate so the dir starts
+        # empty each turn (simple artifact capture); resume still works because
+        # the session transcript lives in ~/.claude keyed by the cwd *path*, not
+        # inside the dir (validated by smoke_resume2). The orchestrator serializes
+        # asks per thread, so the shared path is never used concurrently.
+        scratch = _scratch_path(scratch_key)
+        shutil.rmtree(scratch, ignore_errors=True)   # clear any prior-turn / crashed-run leftovers
+        os.makedirs(scratch, exist_ok=True)
+        try:
+            _stage_skills(self._secrets.skills_pool, cfg.skills, scratch)
+            options = self._base_options(
+                cfg, system_prompt, resume_session_id,
+                **skill_loading_kwargs(scratch_dir=scratch, skills=cfg.skills),
+            )
+            last_text, session_id = await self._drain(options, text, resume_session_id)
+            artifacts = _collect_artifacts(scratch)
+            return CitedAnswer(
+                text=last_text or self._fallback(binding),
+                session_id=session_id,
+                artifacts=artifacts,
+            )
+        finally:
+            shutil.rmtree(scratch, ignore_errors=True)
