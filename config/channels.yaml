@@ -52,10 +52,10 @@ projects:
 #        tz: Europe/Stockholm
 #        dir: docs/adr           # default
 # Personal Subscriptions (optional). When this block is present, subscribers
-# receive a Personal Digest by DM on the cadence each user picks via
-# `/babbla digest <daily|weekly|off>` (default below applies until they choose).
-# Management (`/babbla subscribe|unsubscribe|list`) works even without this block;
-# personal DM-ask routing and the digest require it.
+# receive a Personal Digest by DM on the cadence each user picks by DMing Babbla
+# in plain language (e.g. "make my digest weekly"; default applies until they choose).
+# Subscription management ("follow MyTV", "what am I following?") works even without
+# this block; personal DM-ask routing and the digest require it.
 # personal_digest:
 #   default_cadence: weekly   # daily | weekly
 #   tz: Europe/Stockholm
