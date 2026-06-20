@@ -162,3 +162,16 @@ async def test_summarize_shared_topic_injects_preamble_and_sentinel_empties():
     )
     assert out == ""
     assert "incidents" in agent.prompt and "outages" in agent.prompt and NOTHING_RELEVANT in agent.prompt
+
+
+from babbla.digest.adr import AdrRunner
+
+
+async def test_adr_runner_builds_prompt_and_returns_text():
+    agent = SentinelAgent("TEASER TEXT")
+    out = await AdrRunner(agent).teaser(_binding(), "docs/adr/0003-read-only.md")
+    assert out == "TEASER TEXT"
+    p = agent.prompt
+    assert "docs/adr/0003-read-only.md" in p
+    assert "Wkkkkk/MyTV" in p                       # repo slug for the GitHub link
+    assert "github.com/Wkkkkk/MyTV" in p            # asks for a link back to the ADR
