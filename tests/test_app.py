@@ -163,3 +163,53 @@ def test_build_scheduler_inert_when_nothing_configured(tmp_path):
         config=config, secrets=load_secrets(ENV), db_path=str(tmp_path / "s.db"), client=object()
     )
     assert sched._actions == ()
+
+
+from babbla.digest.actions import StalePRAction, AdrOfWeekAction
+
+
+def test_build_scheduler_assembles_stale_pr_and_adr(tmp_path):
+    cfg_path = tmp_path / "channels.yaml"
+    cfg_path.write_text(
+        "projects:\n"
+        "  - name: MyTV\n    owner: Wkkkkk\n    repo: MyTV\n    visibility: public\n"
+        "    channel_id: C123\n    dm: true\n"
+        "    stale_prs:\n      cadence: weekly\n      tz: UTC\n"
+        "    adr:\n      cadence: weekly\n      tz: UTC\n"
+    )
+    config = load_config(cfg_path)
+    sched = build_scheduler(
+        config=config, secrets=load_secrets(ENV), db_path=str(tmp_path / "s.db"), client=object()
+    )
+    kinds = sorted(type(a).__name__ for a in sched._actions)
+    assert kinds == ["AdrOfWeekAction", "StalePRAction"]
+
+
+def test_build_scheduler_stale_pr_only(tmp_path):
+    cfg_path = tmp_path / "channels.yaml"
+    cfg_path.write_text(
+        "projects:\n"
+        "  - name: MyTV\n    owner: Wkkkkk\n    repo: MyTV\n    visibility: public\n"
+        "    channel_id: C123\n    dm: true\n"
+        "    stale_prs:\n      cadence: weekly\n      tz: UTC\n"
+    )
+    config = load_config(cfg_path)
+    sched = build_scheduler(
+        config=config, secrets=load_secrets(ENV), db_path=str(tmp_path / "s.db"), client=object()
+    )
+    assert [type(a).__name__ for a in sched._actions] == ["StalePRAction"]
+
+
+def test_build_scheduler_inert_includes_no_new_actions(tmp_path):
+    cfg_path = tmp_path / "channels.yaml"
+    cfg_path.write_text(
+        "projects:\n  - name: MyTV\n    owner: Wkkkkk\n    repo: MyTV\n"
+        "    visibility: public\n    channel_id: C123\n    dm: true\n"
+    )
+    config = load_config(cfg_path)
+    sched = build_scheduler(
+        config=config, secrets=load_secrets(ENV), db_path=str(tmp_path / "s.db"), client=object()
+    )
+    names = [type(a).__name__ for a in sched._actions]
+    assert "StalePRAction" not in names and "AdrOfWeekAction" not in names
+    assert sched._actions == ()
