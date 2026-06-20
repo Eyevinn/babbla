@@ -5,7 +5,7 @@ from babbla.agent_runner import AgentRunner, Artifact, CitedAnswer, Secrets
 from babbla.config import ProjectBinding
 
 BINDING = ProjectBinding("MyTV", "Wkkkkk", "MyTV", "public", "C123", True)
-SECRETS = Secrets(github_token="ghp_x", agentmemory_url="http://localhost:3111", agentmemory_secret="")
+SECRETS = Secrets(github_token="ghp_x")
 
 
 class FakeResultMessage:
@@ -40,7 +40,7 @@ async def test_run_ask_passes_readonly_options():
     assert opts.permission_mode == "dontAsk"
     assert opts.permission_mode != "bypassPermissions"
     assert all(t.startswith("mcp__") for t in opts.allowed_tools)
-    assert "github" in opts.mcp_servers and "agentmemory" in opts.mcp_servers
+    assert "github" in opts.mcp_servers and "agentmemory" not in opts.mcp_servers
 
 
 async def test_run_ask_new_session_has_no_resume():
@@ -95,8 +95,7 @@ async def test_unskilled_options_have_no_scratch_or_skills():
 
 async def test_skilled_options_carry_scratch_skills_and_hook(tmp_path):
     captured = {}
-    secrets = Secrets(github_token="g", agentmemory_url="http://x", agentmemory_secret="",
-                      skills_pool=_pool_with(tmp_path))
+    secrets = Secrets(github_token="g", skills_pool=_pool_with(tmp_path))
     runner = AgentRunner(secrets, query_fn=make_query_fn(captured))
     await runner.run_ask("draw it", SKILLED_BINDING, resume_session_id=None, scratch_key="t1")
     opts = captured["options"]
@@ -111,8 +110,7 @@ async def test_skilled_options_carry_scratch_skills_and_hook(tmp_path):
 async def test_skilled_cwd_is_stable_per_scratch_key(tmp_path):
     # Resume needs the same cwd across a thread's turns. Same key -> same path;
     # different key -> different path.
-    secrets = Secrets(github_token="g", agentmemory_url="http://x", agentmemory_secret="",
-                      skills_pool=_pool_with(tmp_path))
+    secrets = Secrets(github_token="g", skills_pool=_pool_with(tmp_path))
     a, b, c = {}, {}, {}
     await AgentRunner(secrets, query_fn=make_query_fn(a)).run_ask(
         "q", SKILLED_BINDING, None, scratch_key="thread-A")
@@ -128,8 +126,7 @@ async def test_skilled_branch_skipped_without_scratch_key(tmp_path):
     # A skilled binding with NO scratch_key (e.g. the digest path) must take the
     # plain branch — never load skills or a scratch.
     captured = {}
-    secrets = Secrets(github_token="g", agentmemory_url="http://x", agentmemory_secret="",
-                      skills_pool=_pool_with(tmp_path))
+    secrets = Secrets(github_token="g", skills_pool=_pool_with(tmp_path))
     runner = AgentRunner(secrets, query_fn=make_query_fn(captured))
     await runner.run_ask("digest", SKILLED_BINDING, resume_session_id=None)  # no scratch_key
     opts = captured["options"]
@@ -139,8 +136,7 @@ async def test_skilled_branch_skipped_without_scratch_key(tmp_path):
 
 async def test_skilled_scratch_is_removed_after_run(tmp_path):
     captured = {}
-    secrets = Secrets(github_token="g", agentmemory_url="http://x", agentmemory_secret="",
-                      skills_pool=_pool_with(tmp_path))
+    secrets = Secrets(github_token="g", skills_pool=_pool_with(tmp_path))
     runner = AgentRunner(secrets, query_fn=make_query_fn(captured))
     await runner.run_ask("draw it", SKILLED_BINDING, resume_session_id=None, scratch_key="t1")
     assert not Path(captured["options"].cwd).exists()  # wiped in finally
@@ -148,8 +144,7 @@ async def test_skilled_scratch_is_removed_after_run(tmp_path):
 
 async def test_skilled_scratch_removed_even_on_exception(tmp_path):
     from babbla.agent_runner import _scratch_path
-    secrets = Secrets(github_token="g", agentmemory_url="http://x", agentmemory_secret="",
-                      skills_pool=_pool_with(tmp_path))
+    secrets = Secrets(github_token="g", skills_pool=_pool_with(tmp_path))
 
     async def boom(prompt, options=None):
         raise RuntimeError("agent died")
@@ -162,8 +157,7 @@ async def test_skilled_scratch_removed_even_on_exception(tmp_path):
 
 
 async def test_skilled_captures_artifacts(tmp_path):
-    secrets = Secrets(github_token="g", agentmemory_url="http://x", agentmemory_secret="",
-                      skills_pool=_pool_with(tmp_path))
+    secrets = Secrets(github_token="g", skills_pool=_pool_with(tmp_path))
 
     async def writing_query(prompt, options=None):
         # Simulate a skill writing an artifact into the scratch cwd.

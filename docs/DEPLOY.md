@@ -27,7 +27,6 @@ it exits after sending and can be triggered by a cron job or a scheduled contain
 | `GITHUB_TOKEN` | Yes | Fine-grained PAT, read-only, scoped to the target repo |
 | `ANTHROPIC_API_KEY` | Optional locally / required on OSC | Claude API key; omit on a developer laptop to use a Claude subscription (Path B) |
 | `BABBLA_GITHUB_MCP` | Set to `binary` in the image | Selects the bundled `github-mcp-server` binary instead of pulling via Docker |
-| `AGENTMEMORY_URL` | Optional | Set to empty string (or leave unset) to disable agentmemory enrichment |
 
 All secrets are injected at runtime — never baked into the image or committed to the
 repository.
@@ -123,7 +122,6 @@ SLACK_APP_TOKEN=xapp-…
 GITHUB_TOKEN=github_pat_…
 ANTHROPIC_API_KEY=sk-ant-…
 BABBLA_GITHUB_MCP=binary
-AGENTMEMORY_URL=
 BABBLA_CONFIG=/data/channels.yaml
 BABBLA_DB=/state/babbla.db
 ```

@@ -1,8 +1,6 @@
 import pytest
 
 from babbla.read_only import (
-    AGENTMEMORY_READERS,
-    AGENTMEMORY_WRITERS,
     ALLOWED_TOOLS,
     DEFAULT_MODEL,
     GITHUB_WILDCARD,
@@ -14,10 +12,7 @@ FORBIDDEN_BUILTINS = ("Bash", "Write", "Edit", "Read", "NotebookEdit", "WebFetch
 
 
 def _cfg(**over):
-    args = dict(
-        owner="Wkkkkk", repo="MyTV", github_token="ghp_dummy",
-        agentmemory_url="http://localhost:3111", agentmemory_secret="",
-    )
+    args = dict(owner="Wkkkkk", repo="MyTV", github_token="ghp_dummy")
     args.update(over)
     return build_agent_config(**args)
 
@@ -42,9 +37,12 @@ def test_only_mcp_tools_allowed(cfg):
         assert builtin not in cfg.allowed_tools
 
 
-def test_no_agentmemory_writer_allowlisted(cfg):
-    for writer in AGENTMEMORY_WRITERS:
-        assert writer not in cfg.allowed_tools
+def test_no_agentmemory_tool_anywhere(cfg):
+    # agentmemory was removed entirely (ADR 0016): no agentmemory MCP server,
+    # and nothing under its tool namespace is ever allow-listed.
+    assert "agentmemory" not in cfg.mcp_servers
+    for tool in cfg.allowed_tools:
+        assert not tool.startswith("mcp__agentmemory__"), tool
 
 
 @pytest.mark.parametrize("launcher", ["docker", "binary"])
@@ -74,22 +72,8 @@ def test_github_toolsets_cover_why_surfaces(cfg):
     assert {"repos", "pull_requests", "issues"} <= enabled
 
 
-def test_agentmemory_present_when_configured(cfg):
-    am_tools = [t for t in cfg.allowed_tools if t.startswith("mcp__agentmemory__")]
-    assert set(am_tools) == set(AGENTMEMORY_READERS)
-    assert "agentmemory" in cfg.mcp_servers
-
-
-def test_agentmemory_omitted_when_url_empty():
-    cfg = _cfg(agentmemory_url="")
-    assert "agentmemory" not in cfg.mcp_servers
-    assert cfg.allowed_tools == (GITHUB_WILDCARD,)
-    for t in cfg.allowed_tools:
-        assert not t.startswith("mcp__agentmemory__")
-
-
-def test_allowed_tools_matches_frozen_set_when_agentmemory_on(cfg):
-    assert cfg.allowed_tools == ALLOWED_TOOLS
+def test_allowed_tools_is_github_only(cfg):
+    assert cfg.allowed_tools == ALLOWED_TOOLS == (GITHUB_WILDCARD,)
 
 
 def test_default_model(cfg):
@@ -113,10 +97,8 @@ def test_system_prompt_covers_history_surfaces(cfg):
     assert "issue" in prompt
 
 
-def test_system_prompt_frames_agentmemory_as_optional_enrichment(cfg):
-    prompt = cfg.system_prompt
-    assert "agentmemory" in prompt.lower()
-    assert "optional" in prompt.lower() or "enrich" in prompt.lower()
+def test_system_prompt_does_not_mention_agentmemory(cfg):
+    assert "agentmemory" not in cfg.system_prompt.lower()
 
 
 def _decision(out):
@@ -169,15 +151,12 @@ async def test_guard_ignores_mcp_tools(tmp_path):
     assert out == {}  # no opinion -> governed by allowed_tools + dontAsk
 
 
-def test_skilled_build_keeps_readers_only_allowed_tools():
+def test_skilled_build_keeps_github_only_allowed_tools():
     cfg = _cfg(skills=("architecture-diagram",))
     assert cfg.skills == ("architecture-diagram",)
-    assert cfg.allowed_tools == ALLOWED_TOOLS         # builtins NOT allow-listed
+    assert cfg.allowed_tools == ALLOWED_TOOLS == (GITHUB_WILDCARD,)  # builtins NOT allow-listed
     for builtin in FORBIDDEN_BUILTINS:
         assert builtin not in cfg.allowed_tools
-    for writer in AGENTMEMORY_WRITERS:
-        assert writer not in cfg.allowed_tools
-    assert _cfg(skills=("architecture-diagram",), agentmemory_url="").allowed_tools == (GITHUB_WILDCARD,)
 
 
 def test_skill_loading_kwargs_shape(tmp_path):

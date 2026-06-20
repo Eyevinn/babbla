@@ -12,10 +12,9 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src
 RUN pip install --no-cache-dir .
-# Use the bundled binary, not docker; agentmemory off unless AGENTMEMORY_URL is set.
+# Use the bundled github-mcp-server binary, not docker (no Docker-in-Docker at runtime).
 ENV BABBLA_GITHUB_MCP=binary \
     BABBLA_CONFIG=/data/channels.yaml \
-    BABBLA_DB=/data/babbla.db \
-    AGENTMEMORY_URL=""
+    BABBLA_DB=/data/babbla.db
 VOLUME ["/data"]
 ENTRYPOINT ["python", "-m", "babbla.app"]

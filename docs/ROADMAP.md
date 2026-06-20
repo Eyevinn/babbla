@@ -21,9 +21,12 @@ Three commitments shape everything below:
 1. **The project repo is the source of truth for "why."** Babbla reads a project's existing
    surfaces — `README`, `CLAUDE.md`, `docs/`, architecture notes, ADRs, commit messages, PR
    bodies, issues — over the read-only GitHub path it already has.
-2. **agentmemory is optional local enrichment, never required.** It is not in Babbla's critical
-   path. At most it is a *local drafting aid* a developer may use to help write good PRs/docs;
-   its contents are never uploaded anywhere.
+2. **No external memory service.** "Why" comes from the repo, not from a side database. Babbla
+   was briefly wired to read an optional local [agentmemory](https://github.com/rohitg00/agentmemory)
+   store, but since the repo is the source of truth that enrichment carried no weight in the
+   critical path, so it was **removed entirely** ([ADR 0016](adr/0016-remove-agentmemory.md)). A
+   developer is of course free to use any local tool to help *author* good PRs/docs — but the
+   durable "why" must land in the repo, and Babbla reads only the repo.
 3. **No pollution.** Babbla requires **no changes** to the projects it reads — no new artifacts,
    no mandated files. We *recommend* documentation routines (advisory). Sparse docs produce
    thinner answers, never failure (graceful degradation).
@@ -35,13 +38,14 @@ and not the projects.
 ## The "known wall" — resolved by dissolving it
 
 The proposal framed centralizing agentmemory off the laptop as the cloud-migration blocker.
-Under the organizing principle above, **agentmemory leaves Babbla's critical path**, so there
+Under the organizing principle above, **agentmemory left Babbla's critical path entirely**
+(and has since been removed — [ADR 0016](adr/0016-remove-agentmemory.md)), so there
 is no memory service left to centralize. The wall dissolves into ordinary work:
 
 | Half of the wall | Resolution |
 | --- | --- |
 | **Read** ("why" reaches Babbla) | Read repo-resident surfaces over the existing GitHub path. Inherits the repo's access control for free (private repo → private "why"); no second auth system. Runtime-agnostic — a repo file needs no special MCP, so Copilot reads it as easily as Claude. |
-| **Capture** ("why" reaches the repo) | Minimal + advisory. No artifact, no per-developer upload. Just recommended documentation hygiene (which teams should do regardless), with agentmemory as an optional *local* aid for authoring it. Babbla stays strictly read-only; all capture is normal PR/doc workflow with human review. |
+| **Capture** ("why" reaches the repo) | Minimal + advisory. No artifact, no per-developer upload. Just recommended documentation hygiene (which teams should do regardless), authored with whatever local tools a developer likes. Babbla stays strictly read-only; all capture is normal PR/doc workflow with human review. |
 | **Infra remnant** (always-on) | Host the thin connector on a server so Asks/Digests survive a sleeping laptop. Small, *because there is no agentmemory to host.* See the open question below. |
 
 ### ADR impact

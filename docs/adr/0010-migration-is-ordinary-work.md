@@ -1,6 +1,8 @@
 # ADR 0010: Always-on migration is ordinary work, not blocked on agentmemory centralization
 
-- **Status:** Accepted
+- **Status:** Accepted — conclusion holds and is reinforced by
+  [0016](0016-remove-agentmemory.md): with agentmemory removed entirely there is
+  definitively no memory service to centralize.
 - **Date:** 2026-06-18
 - **Deciders:** Kun Wu
 

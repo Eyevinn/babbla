@@ -16,8 +16,6 @@ ENV = {
 def test_load_secrets_defaults():
     s = load_secrets(ENV)
     assert s.github_token == "ghp_x"
-    assert s.agentmemory_url == "http://localhost:3111"
-    assert s.agentmemory_secret == ""
 
 
 def test_load_secrets_missing_required_raises():
@@ -25,13 +23,6 @@ def test_load_secrets_missing_required_raises():
     del broken["GITHUB_TOKEN"]
     with pytest.raises(RuntimeError, match="GITHUB_TOKEN"):
         load_secrets(broken)
-
-
-def test_load_secrets_custom_agentmemory():
-    env = dict(ENV, AGENTMEMORY_URL="http://localhost:9999", AGENTMEMORY_SECRET="shh")
-    s = load_secrets(env)
-    assert s.agentmemory_url == "http://localhost:9999"
-    assert s.agentmemory_secret == "shh"
 
 
 def test_build_orchestrator(tmp_path):

@@ -28,13 +28,14 @@ Format is lightweight [Nygard-style](https://cognitect.com/blog/2011/11/15/docum
 | [0006](0006-stateful-config.md) | Version-controlled shared config; only personal Digest config is written | Accepted |
 | [0007](0007-access-visibility-redaction.md) | Access = Slack membership; Visibility tiers; Incident PII redaction | Accepted |
 | [0008](0008-release-anchored-digests.md) | Release-anchored Digests on a launchd heartbeat | Accepted |
-| [0009](0009-repo-is-source-of-truth-for-why.md) | The project repo is the source of truth for "why"; agentmemory is optional local enrichment | Accepted |
+| [0009](0009-repo-is-source-of-truth-for-why.md) | The project repo is the source of truth for "why"; agentmemory is optional local enrichment | Accepted (agentmemory clause superseded by [0016](0016-remove-agentmemory.md)) |
 | [0010](0010-migration-is-ordinary-work.md) | Always-on migration is ordinary work, not blocked on agentmemory centralization | Accepted |
 | [0011](0011-always-on-container-hosting.md) | Always-on container hosting | Accepted |
 | [0012](0012-digest-anchor-sourcing.md) | Digest anchor sourcing via per-project branch/deploy config | Accepted |
 | [0013](0013-thread-scoped-conversation-sessions.md) | Thread-scoped conversation sessions via Slack `thread_ts` | Accepted |
 | [0014](0014-private-repo-token-access.md) | GitHub token may read specific private/internal repos for onboarding | Accepted |
 | [0015](0015-skilled-answer-path.md) | Skilled answer path — bounded read-only loosening for artifacts | Accepted |
+| [0016](0016-remove-agentmemory.md) | Remove agentmemory entirely — the repo is the only source of "why" | Accepted |
 
 ADRs 0001–0008 were decided on 2026-06-18 and written from the design proposal
 ([`../PROPOSAL-design.md`](../PROPOSAL-design.md)). ADRs 0009–0010 capture the
@@ -44,4 +45,7 @@ ADR 0013 documents the thread-scoped conversation model, confirmed during Phase 
 live smoke testing (2026-06-19). ADR 0014 establishes that the fine-grained GitHub
 token may be extended to specific private/internal repos for onboarding. ADR 0015
 defines the skilled answer path — a bounded, read-only loosening that lets project
-bindings opt into per-thread scratch-based artifact production.
+bindings opt into per-thread scratch-based artifact production. ADR 0016 removes
+agentmemory entirely (2026-06-20): the optional local-enrichment path of 0009 was off
+in production and added read-only surface area, so the repo is now the *only* source of
+"why" Babbla reads.
