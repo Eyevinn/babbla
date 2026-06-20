@@ -60,9 +60,10 @@ class PerProjectDigestAction:
                 slug = f"{self._b.owner}/{self._b.repo}"
                 lead = f"Here's a {self._b.digest.cadence} update summary on *{slug}*"
                 full = f"{lead}\n\n{text}"
-                await self._poster.post(
-                    self._b.channel_id, full, blocks=delete_button_blocks(full)
-                )
+                # Channel digests carry no delete button — they match the other
+                # channel reports (ADR, quiz, stale-PR), which post plain text.
+                # The delete button stays on the personal DM digest only, below.
+                await self._poster.post(self._b.channel_id, full)
         await self._store.advance(self._b.channel_id, head, now.timestamp())
 
 

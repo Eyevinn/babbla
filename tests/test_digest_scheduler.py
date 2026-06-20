@@ -31,19 +31,6 @@ class FakePoster:
         self.posts.append((channel_id, text)); self.blocks.append(blocks); return "ts"
 
 
-def _action_ids(blocks):
-    return [e["action_id"] for b in (blocks or []) if b.get("type") == "actions"
-            for e in b["elements"]]
-
-
-def _btn_value(blocks):
-    for b in blocks or []:
-        if b.get("type") == "actions":
-            # Absent value == "anyone may delete" (Slack rejects an empty value).
-            return b["elements"][0].get("value") or ""
-    return None
-
-
 def _action(binding, state, *, head, changes, monkeypatch):
     store, runner, poster = FakeStore(state), FakeRunner(), FakePoster()
     monkeypatch.setattr(A, "current_head", lambda b, *, get_json: head)
@@ -77,14 +64,14 @@ async def test_first_run_branch_posts_window_and_sets_watermark(monkeypatch):
     assert store.advanced == [("C0XXXXXXXXX", "H", NOW.timestamp())]
 
 
-async def test_digest_post_carries_delete_button_for_anyone(monkeypatch):
-    from babbla.blocks import DELETE_ACTION_ID
+async def test_digest_post_has_no_delete_button(monkeypatch):
+    # Channel digests post plain text, matching the other channel reports
+    # (ADR, quiz, stale-PR). The delete button lives on the personal DM digest only.
     action, store, runner, poster = _action(
         _binding(), DigestState(None, None), head="H",
         changes=[Change("c1", "feat: a (#1)", 1)], monkeypatch=monkeypatch)
     await action.maybe_run(NOW)
-    assert DELETE_ACTION_ID in _action_ids(poster.blocks[-1])
-    assert _btn_value(poster.blocks[-1]) == ""   # channel digest: anyone may delete
+    assert poster.blocks[-1] is None
 
 
 async def test_first_run_deploy_is_silent_but_sets_watermark(monkeypatch):
