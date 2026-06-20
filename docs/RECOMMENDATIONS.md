@@ -52,15 +52,6 @@ future maintainer would otherwise re-litigate — add a short
 under `docs/adr/`. Babbla treats `docs/adr/` as a first-class source of "why".
 (Babbla's own ADRs in [`adr/`](adr/) are a working example of the format.)
 
-### 4. Optionally, use agentmemory locally as a drafting aid
-
-If you already run [agentmemory](https://github.com/rohitg00/agentmemory) on your
-machine, it can help you *author* the descriptive PR bodies, commit messages, and
-ADRs above. This is entirely optional and entirely local: **Babbla never reads
-your agentmemory, and nothing is uploaded anywhere.** agentmemory is a writing aid
-for *you*; the durable "why" still has to land in the repo (a PR body, a commit
-message, an ADR) for Babbla — or any teammate — to see it.
-
 ## What you do *not* need to do
 
 - ❌ Add any Babbla-specific file or config to your repo.

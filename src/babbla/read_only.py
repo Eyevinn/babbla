@@ -9,29 +9,12 @@ DEFAULT_MODEL = "claude-opus-4-8"
 
 GITHUB_TOOL_PREFIX = "mcp__github__"
 
-# The ONLY agentmemory tools the agent may call. Adding one here also requires
-# updating the guard test's expectation. Never add a writer.
-AGENTMEMORY_READERS: tuple[str, ...] = (
-    "mcp__agentmemory__memory_recall",
-    "mcp__agentmemory__memory_smart_search",
-    "mcp__agentmemory__memory_facet_query",
-    "mcp__agentmemory__memory_relations",
-)
-
-# agentmemory mutating tools — listed so the guard test can assert none leak in.
-AGENTMEMORY_WRITERS: tuple[str, ...] = (
-    "mcp__agentmemory__memory_save",
-    "mcp__agentmemory__memory_action_create",
-    "mcp__agentmemory__memory_action_update",
-    "mcp__agentmemory__memory_governance_delete",
-)
-
 # GitHub read-only-ness is enforced server-side (GITHUB_READ_ONLY=1 + the `stdio`
 # subcommand), so a wildcard over that server is safe: the server cannot expose a
-# writer. agentmemory exposes writers, so it is allowlisted tool-by-tool above.
+# writer. The github server is the agent's only tool source.
 GITHUB_WILDCARD = "mcp__github__*"
 
-ALLOWED_TOOLS: tuple[str, ...] = (GITHUB_WILDCARD, *AGENTMEMORY_READERS)
+ALLOWED_TOOLS: tuple[str, ...] = (GITHUB_WILDCARD,)
 
 
 def _within(path: str, root: str) -> bool:
@@ -135,9 +118,6 @@ def build_system_prompt(owner: str, repo: str) -> str:
         f"You are Babbla, a read-only assistant answering questions about the "
         f"{slug} project on GitHub. Answer ONLY from {slug}'s pushed history and code "
         f"(commits, pull requests, issues, branches, files) reachable via the github tools. "
-        f"The agentmemory tools are an OPTIONAL enrichment — extra per-commit rationale when "
-        f"it happens to exist — not a required or co-equal source; treat them as "
-        f"supplementary and never assume they hold the answer. "
         f"You have no write access and no local files.\n\n"
         f"The repository itself is the source of truth for \"why\". Before answering a "
         f"\"why\" or \"how does this work\" question, consult the project's own documentation "
@@ -180,35 +160,20 @@ def _github_server(token: str, launcher: str) -> dict:
     raise ValueError(f"unknown github_launcher: {launcher!r}")
 
 
-def _agentmemory_server(url: str, secret: str) -> dict:
-    return {
-        "command": "npx",
-        "args": ["-y", "@agentmemory/mcp"],
-        "env": {"AGENTMEMORY_URL": url, "AGENTMEMORY_SECRET": secret},
-    }
-
-
 def build_agent_config(
     *,
     owner: str,
     repo: str,
     github_token: str,
-    agentmemory_url: str,
-    agentmemory_secret: str,
     model: str = DEFAULT_MODEL,
     github_launcher: str = "docker",
     skills: tuple[str, ...] = (),
 ) -> AgentConfig:
-    mcp_servers = {"github": _github_server(github_token, github_launcher)}
-    allowed_tools: tuple[str, ...] = (GITHUB_WILDCARD,)
-    if agentmemory_url:  # agentmemory is OPTIONAL local enrichment (ADR 0009)
-        mcp_servers["agentmemory"] = _agentmemory_server(agentmemory_url, agentmemory_secret)
-        allowed_tools = ALLOWED_TOOLS
     return AgentConfig(
         model=model,
         system_prompt=build_system_prompt(owner, repo),
-        allowed_tools=allowed_tools,      # builtins are hook-gated, NOT allow-listed
+        allowed_tools=ALLOWED_TOOLS,      # github only; builtins are hook-gated, NOT allow-listed
         permission_mode="dontAsk",
-        mcp_servers=mcp_servers,
+        mcp_servers={"github": _github_server(github_token, github_launcher)},
         skills=skills,
     )

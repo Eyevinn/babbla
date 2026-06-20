@@ -17,11 +17,7 @@ async def test_live_ask_cites_a_source():
     # only GITHUB_TOKEN is gated here; set ANTHROPIC_API_KEY to use an API key.
     if not os.environ.get("GITHUB_TOKEN"):
         pytest.skip("integration test needs GITHUB_TOKEN (Claude auth via CLI login)")
-    secrets = Secrets(
-        github_token=os.environ["GITHUB_TOKEN"],
-        agentmemory_url=os.environ.get("AGENTMEMORY_URL", "http://localhost:3111"),
-        agentmemory_secret=os.environ.get("AGENTMEMORY_SECRET", ""),
-    )
+    secrets = Secrets(github_token=os.environ["GITHUB_TOKEN"])
     runner = AgentRunner(secrets)
     answer = await runner.run_ask(
         "What does the MyTV repository do? Cite a specific file or commit.",

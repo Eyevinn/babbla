@@ -29,8 +29,6 @@ class CitedAnswer:
 @dataclass(frozen=True)
 class Secrets:
     github_token: str
-    agentmemory_url: str
-    agentmemory_secret: str
     model: str = DEFAULT_MODEL
     github_launcher: str = "docker"
     skills_pool: str = "config/skills"
@@ -93,8 +91,6 @@ class AgentRunner:
             owner=binding.owner,
             repo=binding.repo,
             github_token=self._secrets.github_token,
-            agentmemory_url=self._secrets.agentmemory_url,
-            agentmemory_secret=self._secrets.agentmemory_secret,
             model=self._secrets.model,
             github_launcher=self._secrets.github_launcher,
             skills=binding.skills,

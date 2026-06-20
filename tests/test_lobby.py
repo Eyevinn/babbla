@@ -153,7 +153,7 @@ async def test_make_classify_fn_returns_model_text():
 
 async def test_classify_fn_isolated_from_project_context():
     # The classifier must be a pure label-emitter: no CLAUDE.md / project settings,
-    # no agentmemory MCP. Otherwise it answers like a full assistant and emits prose.
+    # no MCP servers. Otherwise it answers like a full assistant and emits prose.
     captured = {}
 
     class _Msg:
@@ -170,5 +170,5 @@ async def test_classify_fn_isolated_from_project_context():
     await classify("question", cat)
     opts = captured["options"]
     assert opts.setting_sources == []   # no CLAUDE.md / filesystem settings loaded
-    assert not opts.mcp_servers         # no agentmemory or other MCP servers
+    assert not opts.mcp_servers         # no MCP servers
     assert opts.allowed_tools == []     # already tools-less; assert it stays so

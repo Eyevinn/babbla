@@ -45,8 +45,6 @@ def load_secrets(env: Mapping[str, str]) -> Secrets:
         raise RuntimeError(f"Missing required env vars: {', '.join(missing)}")
     return Secrets(
         github_token=env["GITHUB_TOKEN"],
-        agentmemory_url=env.get("AGENTMEMORY_URL", "http://localhost:3111"),
-        agentmemory_secret=env.get("AGENTMEMORY_SECRET", ""),
         model=env.get("BABBLA_MODEL", DEFAULT_MODEL),
         github_launcher=env.get("BABBLA_GITHUB_MCP", "docker"),
         skills_pool=env.get("BABBLA_SKILLS_POOL", "config/skills"),

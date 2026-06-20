@@ -78,7 +78,7 @@ def make_classify_fn(query_fn, model: str):
             "Reply with ONLY the name or NONE — no other text.\n\nProjects:\n" + listing
         )
         # A pure label-emitter: no tools, no MCP servers, and no filesystem
-        # settings (CLAUDE.md / project settings / agentmemory wiring). Without
+        # settings (CLAUDE.md / project settings). Without
         # setting_sources=[] the SDK loads project context and the classifier
         # starts answering like a full assistant — emitting prose, not a name.
         options = ClaudeAgentOptions(

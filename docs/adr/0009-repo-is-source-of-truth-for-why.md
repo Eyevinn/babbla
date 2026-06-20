@@ -1,6 +1,8 @@
 # ADR 0009: The project repo is the source of truth for "why"; agentmemory is optional local enrichment
 
-- **Status:** Accepted
+- **Status:** Accepted — the source-of-truth principle stands; the "agentmemory is
+  optional local enrichment" clause is **superseded by [0016](0016-remove-agentmemory.md)**
+  (agentmemory removed entirely).
 - **Date:** 2026-06-18
 - **Deciders:** Kun Wu
 
