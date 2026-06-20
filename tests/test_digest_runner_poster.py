@@ -164,6 +164,35 @@ async def test_summarize_shared_topic_injects_preamble_and_sentinel_empties():
     assert "incidents" in agent.prompt and "outages" in agent.prompt and NOTHING_RELEVANT in agent.prompt
 
 
+async def test_summarize_signals_mark_match_and_add_rule():
+    agent = FakeAgent()
+    topic = Topic("security", "auth and secrets", labels=("security",))
+    await DigestRunner(agent).summarize(
+        _binding(),
+        [Change("aaa1111", "feat: OAuth (#42)", 42, labels=("security",)),
+         Change("bbb2222", "chore: bump eslint (#43)", 43, labels=("deps",))],
+        "head99", topic=topic,
+    )
+    p = agent.prompt
+    assert "- ✓ aaa1111 feat: OAuth (#42)" in p          # matched -> marked
+    assert "- bbb2222 chore: bump eslint (#43)" in p      # unmatched -> no mark
+    assert "marked with ✓" in p and "MUST be included" in p
+
+
+async def test_summarize_topic_without_signals_has_no_marks_or_rule():
+    agent = FakeAgent()
+    topic = Topic("security", "auth and secrets")  # no signals
+    await DigestRunner(agent).summarize(
+        _binding(),
+        [Change("aaa1111", "feat: OAuth (#42)", 42, labels=("security",))],
+        "head99", topic=topic,
+    )
+    p = agent.prompt
+    assert "✓" not in p
+    assert "MUST be included" not in p
+    assert "scoped to the topic" in p   # plain Topics preamble still present
+
+
 from babbla.digest.adr import AdrRunner
 
 

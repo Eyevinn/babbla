@@ -2,25 +2,35 @@ from __future__ import annotations
 
 from babbla.config import ProjectBinding, Topic
 from babbla.digest.anchors import Change
+from babbla.digest.topics_match import matches_topic
 from babbla.read_only import DIGEST_SYSTEM_PROMPT
 
 NOTHING_RELEVANT = "NOTHING_RELEVANT"
 
 
 def _topic_preamble(topic: Topic) -> str:
-    return (
+    base = (
         f'This digest is scoped to the topic "{topic.name}": {topic.description}. '
         "Include ONLY changes relevant to this topic; omit everything else — do not pad. "
         "If NONE of the changes below are relevant to this topic, reply with exactly: "
         f"{NOTHING_RELEVANT}\n\n"
     )
+    if topic.has_signals:
+        base += (
+            "Changes marked with ✓ match this topic by label or file path and MUST be "
+            "included. For changes without ✓, include one only if it is relevant to the "
+            "topic description above.\n\n"
+        )
+    return base
 
 
-def _facts(changes: list[Change]) -> str:
+def _facts(changes: list[Change], topic: Topic | None = None) -> str:
+    marked = bool(topic and topic.has_signals)
     lines = []
     for c in changes:
         pr = f" (#{c.pr_number})" if c.pr_number else ""
-        lines.append(f"- {c.sha[:7]} {c.subject}{pr}")
+        mark = "✓ " if marked and matches_topic(c, topic) else ""
+        lines.append(f"- {mark}{c.sha[:7]} {c.subject}{pr}")
     return "\n".join(lines)
 
 
@@ -38,7 +48,7 @@ class DigestRunner:
             f"Write a concise Slack digest of what shipped in {slug} (now at {head_sha[:7]}). "
             f"These are the changes in scope — summarize them at a reader-friendly altitude, "
             f"group related work, and CITE commits by SHA and PRs by number as GitHub links:\n\n"
-            f"{_facts(changes)}\n\n"
+            f"{_facts(changes, topic)}\n\n"
             f"Keep it short and Slack-friendly. Lead with the headline. If the changes are all "
             f"minor/chore, say so briefly rather than padding."
         )
