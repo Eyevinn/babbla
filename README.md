@@ -46,15 +46,19 @@ DM — *"follow MyTV"*, *"what am I following?"*, *"make my digest weekly"*.
 
 ## Why it's safe
 
-- **Read-only by construction.** Babbla never mutates the repos it reads. The `github` MCP
-  server runs with `GITHUB_READ_ONLY=1` over stdio — it cannot even expose a writer — and the
-  runtime uses `permission_mode="dontAsk"`, which **hard-denies** any off-allowlist tool (no
-  interactive prompts on a headless server, no `bypassPermissions`). The single bounded exception
-  is the skilled Ask path: a skill may write **only** inside a throwaway, per-thread **scratch
-  dir** that lives outside every repo, enforced by a `PreToolUse` hook that denies all other
-  paths and `Bash`. Babbla reads the GitHub **remote**, so a host's
-  uncommitted/untracked/gitignored files are structurally invisible. The enforcement is pinned
-  by regression tests — see [`src/babbla/read_only.py`](src/babbla/read_only.py) and
+- **Read-only by construction.** Babbla never mutates the repos it reads, enforced by
+  independent layers so no single misconfiguration makes it writable (ADR 0003). The `github`
+  MCP server runs with `GITHUB_READ_ONLY=1` over stdio — it cannot even expose a writer. The
+  agent is confined to the `github` tools and **isolated from the host's Claude settings**
+  (`setting_sources=[]`, `strict_mcp_config=True`) so nothing on the host can widen its tool
+  surface; `permission_mode="dontAsk"` then denies anything not pre-approved (no interactive
+  prompts on a headless server, never `bypassPermissions`). Independently, a `PreToolUse` hook
+  **denies every non-`github` tool** (`Bash`, `Read`, `Write`, …) on the plain path; the skilled
+  Ask path swaps in a hook that additionally permits writes **only** inside a throwaway,
+  per-thread **scratch dir** outside every repo. Babbla reads the GitHub **remote**, so a host's
+  uncommitted/untracked/gitignored files are structurally invisible. The enforcement is pinned by
+  regression tests that assert the **runtime options actually sent to the CLI** (not just config)
+  — see [`src/babbla/read_only.py`](src/babbla/read_only.py) and
   [`tests/test_read_only_guard.py`](tests/test_read_only_guard.py), and ADRs
   [0003](docs/adr/0003-read-only-by-construction.md) and
   [0015](docs/adr/0015-skilled-answer-path.md).

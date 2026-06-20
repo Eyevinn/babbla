@@ -10,7 +10,12 @@ from pathlib import Path
 from claude_agent_sdk import ClaudeAgentOptions, query as _sdk_query
 
 from babbla.config import ProjectBinding
-from babbla.read_only import DEFAULT_MODEL, build_agent_config, skill_loading_kwargs
+from babbla.read_only import (
+    DEFAULT_MODEL,
+    build_agent_config,
+    readonly_hook_kwargs,
+    skill_loading_kwargs,
+)
 
 
 @dataclass(frozen=True)
@@ -108,14 +113,25 @@ class AgentRunner:
         return await self._run_plain(cfg, text, binding, resume_session_id, system_prompt)
 
     def _base_options(self, cfg, system_prompt, resume_session_id, **extra) -> ClaudeAgentOptions:
-        options = ClaudeAgentOptions(
+        # Read-only by construction (ADR 0003), enforced at runtime:
+        # - setting_sources=[] isolates the agent from the host's Claude settings.
+        #   Without it the CLI loads the operator's ~/.claude/settings.json, whose
+        #   permissions.allow rules widen what permission_mode="dontAsk" permits —
+        #   the 2026-06-20 plain-path tool leak. The skilled path overrides this to
+        #   ["project"] (still excludes user settings) to discover staged skills.
+        # - strict_mcp_config pins MCP to the github server we pass, ignoring any
+        #   server defined in loaded settings (e.g. the operator's claude.ai ones).
+        params = dict(
             model=cfg.model,
             system_prompt=system_prompt or cfg.system_prompt,
             allowed_tools=list(cfg.allowed_tools),
             permission_mode=cfg.permission_mode,
             mcp_servers=cfg.mcp_servers,
-            **extra,
+            setting_sources=[],
+            strict_mcp_config=True,
         )
+        params.update(extra)  # path-specific overrides (skilled: setting_sources, cwd, skills, hooks)
+        options = ClaudeAgentOptions(**params)
         if resume_session_id:
             options.resume = resume_session_id
         return options
@@ -136,7 +152,12 @@ class AgentRunner:
         return f"I don't know — I couldn't find anything in {binding.name}'s history."
 
     async def _run_plain(self, cfg, text, binding, resume_session_id, system_prompt) -> CitedAnswer:
-        options = self._base_options(cfg, system_prompt, resume_session_id)
+        # The plain path has no scratch workspace, so it installs the deny-by-default
+        # readonly guard (denies every non-github tool). This is the independent
+        # runtime layer the plain path was missing (incident 2026-06-20).
+        options = self._base_options(
+            cfg, system_prompt, resume_session_id, **readonly_hook_kwargs()
+        )
         last_text, session_id = await self._drain(options, text, resume_session_id)
         return CitedAnswer(text=last_text or self._fallback(binding), session_id=session_id)
 

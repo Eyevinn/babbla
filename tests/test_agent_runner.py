@@ -1,3 +1,5 @@
+import os
+
 import pytest
 from pathlib import Path
 
@@ -89,7 +91,7 @@ async def test_unskilled_options_have_no_scratch_or_skills():
     opts = captured["options"]
     assert getattr(opts, "cwd", None) is None
     assert not getattr(opts, "skills", None)
-    assert getattr(opts, "setting_sources", None) in (None, [])
+    assert opts.setting_sources == []  # isolation, NOT None (which loads host settings)
     assert "Write" not in opts.allowed_tools
 
 
@@ -168,3 +170,69 @@ async def test_skilled_captures_artifacts(tmp_path):
     ans = await runner.run_ask("draw it", SKILLED_BINDING, resume_session_id=None, scratch_key="t1")
     assert ans.text == "drew it"
     assert Artifact("architecture.html", b"<svg/>") in ans.artifacts
+
+
+# --- Plain-path runtime confinement (incident 2026-06-20 remediation) -----------
+# These assert what the runner ACTUALLY sends to query() — the runtime gap the
+# old config-only tests (build_agent_config asserts) never covered. The leak was:
+# the plain path left setting_sources unset, so the CLI loaded the operator's
+# ~/.claude settings and their allow-rules pre-approved Bash/Read/Write/etc.
+
+
+async def test_plain_path_isolates_filesystem_settings():
+    captured = {}
+    runner = AgentRunner(SECRETS, query_fn=make_query_fn(captured))
+    await runner.run_ask("q", BINDING, resume_session_id=None)
+    opts = captured["options"]
+    # [] = SDK isolation mode: do NOT load ~/.claude/settings.json (user) etc.
+    # None would mean "load all filesystem settings" — the bug.
+    assert opts.setting_sources == []
+
+
+async def test_plain_path_uses_strict_mcp_config():
+    # Only the github MCP server we pass is used; the operator's connected
+    # claude.ai MCP integrations (settings-based) are ignored.
+    captured = {}
+    runner = AgentRunner(SECRETS, query_fn=make_query_fn(captured))
+    await runner.run_ask("q", BINDING, resume_session_id=None)
+    assert captured["options"].strict_mcp_config is True
+
+
+async def test_plain_path_installs_deny_by_default_hook():
+    # Independent enforcement layer (ADR 0003): a PreToolUse guard denies any
+    # non-github tool even if the permission layer would have allowed it.
+    captured = {}
+    runner = AgentRunner(SECRETS, query_fn=make_query_fn(captured))
+    await runner.run_ask("q", BINDING, resume_session_id=None)
+    assert "PreToolUse" in (captured["options"].hooks or {})
+
+
+async def test_skilled_path_also_uses_strict_mcp_config(tmp_path):
+    captured = {}
+    secrets = Secrets(github_token="g", skills_pool=_pool_with(tmp_path))
+    runner = AgentRunner(secrets, query_fn=make_query_fn(captured))
+    await runner.run_ask("draw it", SKILLED_BINDING, resume_session_id=None, scratch_key="t1")
+    assert captured["options"].strict_mcp_config is True
+    # skilled keeps project-only settings (excludes the operator's user settings)
+    assert captured["options"].setting_sources == ["project"]
+
+
+# --- Opt-in end-to-end enforcement smoke test -----------------------------------
+# Launches the REAL bundled CLI and confirms a non-github builtin is actually
+# denied at runtime (not just named in config). Needs working Claude auth + the
+# CLI, so it is gated behind BABBLA_E2E=1 and skipped by default.
+
+E2E_SENTINEL = "BABBLA_BASH_ESCAPE_7Q2"
+
+
+@pytest.mark.skipif(os.environ.get("BABBLA_E2E") != "1", reason="set BABBLA_E2E=1 to run live CLI test")
+async def test_e2e_plain_path_denies_bash():
+    runner = AgentRunner(SECRETS)  # real _sdk_query
+    ans = await runner.run_ask(
+        f"Run the shell command `echo {E2E_SENTINEL}` using your Bash tool and "
+        f"reply with its exact output. If you cannot, say DENIED.",
+        BINDING,
+        resume_session_id=None,
+    )
+    # Bash is denied -> the command never runs -> its output never appears.
+    assert E2E_SENTINEL not in ans.text

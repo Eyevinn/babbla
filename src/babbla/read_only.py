@@ -63,6 +63,28 @@ def make_scratch_guard(scratch: str):
     return guard
 
 
+def make_readonly_guard():
+    """A PreToolUse hook for the plain (non-skilled) Ask path: deny-by-default.
+
+    The plain path has no filesystem workspace, so the agent legitimately needs
+    only the read-only github MCP tools. This guard denies every other tool
+    (Bash, Read, Write, Edit, Agent, TaskCreate, WebFetch, the Skill tool, and
+    any non-github MCP server) outright, independent of the permission layer.
+    github tools get no opinion ({}) so they stay governed by allowed_tools +
+    dontAsk.
+
+    This is the runtime confinement layer the 2026-06-20 incident showed was
+    missing on the plain path: with no hook AND no setting_sources isolation, the
+    CLI loaded the operator's ~/.claude allow-rules, which pre-approved builtins.
+    """
+    async def guard(input, tool_use_id, context):
+        tool = input.get("tool_name", "")
+        if tool.startswith(GITHUB_TOOL_PREFIX):
+            return {}  # no opinion -> governed by allowed_tools + dontAsk
+        return _pre_tool("deny", "read-only: only the github tools are permitted")
+    return guard
+
+
 def skill_loading_kwargs(*, scratch_dir: str, skills: tuple[str, ...]) -> dict:
     """`ClaudeAgentOptions` kwargs that load ONLY `skills` from a clean scratch
     workspace headlessly, confine writes to scratch, and leak no Babbla-repo /
@@ -81,6 +103,13 @@ def skill_loading_kwargs(*, scratch_dir: str, skills: tuple[str, ...]) -> dict:
         "skills": list(skills),
         "hooks": {"PreToolUse": [HookMatcher(hooks=[make_scratch_guard(scratch_dir)])]},
     }
+
+
+def readonly_hook_kwargs() -> dict:
+    """`ClaudeAgentOptions` kwargs installing the plain-path deny-by-default guard
+    (see make_readonly_guard). Parallel to skill_loading_kwargs for the plain path,
+    which has no scratch workspace."""
+    return {"hooks": {"PreToolUse": [HookMatcher(hooks=[make_readonly_guard()])]}}
 
 
 @dataclass(frozen=True)

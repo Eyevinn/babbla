@@ -6,7 +6,12 @@ from babbla.read_only import (
     GITHUB_WILDCARD,
     build_agent_config,
 )
-from babbla.read_only import _within, make_scratch_guard, skill_loading_kwargs
+from babbla.read_only import (
+    _within,
+    make_readonly_guard,
+    make_scratch_guard,
+    skill_loading_kwargs,
+)
 
 FORBIDDEN_BUILTINS = ("Bash", "Write", "Edit", "Read", "NotebookEdit", "WebFetch", "WebSearch")
 
@@ -165,3 +170,40 @@ def test_skill_loading_kwargs_shape(tmp_path):
     assert kw["setting_sources"] == ["project"]
     assert kw["skills"] == ["a", "b"]
     assert "PreToolUse" in kw["hooks"]
+
+
+# --- Plain-path deny-by-default guard (incident 2026-06-20 remediation) ---------
+# The plain Ask path had NO PreToolUse hook, so builtin tools (Bash, Read, Write,
+# Agent, ...) reached the permission layer and — because setting_sources was unset —
+# were pre-approved by the operator's loaded ~/.claude allow-rules. make_readonly_guard
+# is the independent deny-by-default layer: it denies anything that is not a github
+# MCP tool, regardless of what the permission layer would decide.
+
+
+async def test_readonly_guard_denies_builtin_tools():
+    guard = make_readonly_guard()
+    for tool in (*FORBIDDEN_BUILTINS, "Agent", "TaskCreate", "AskUserQuestion",
+                 "ToolSearch", "Glob", "Grep", "Skill"):
+        out = await guard({"tool_name": tool, "tool_input": {}}, None, {})
+        assert _decision(out) == "deny", f"{tool} should be denied on the plain path"
+
+
+async def test_readonly_guard_passes_github_tools_through():
+    # github MCP tools get NO opinion ({}) -> governed by allowed_tools + dontAsk,
+    # which permit them. The guard is a deny layer, not the allow mechanism.
+    guard = make_readonly_guard()
+    out = await guard(
+        {"tool_name": "mcp__github__search_code", "tool_input": {}}, None, {}
+    )
+    assert out == {}
+    assert _decision(out) is None
+
+
+async def test_readonly_guard_denies_non_github_mcp_tools():
+    # A non-github MCP server (e.g. the operator's connected claude.ai integrations)
+    # must NOT slip through just because it is an mcp__ tool.
+    guard = make_readonly_guard()
+    out = await guard(
+        {"tool_name": "mcp__notion__search", "tool_input": {}}, None, {}
+    )
+    assert _decision(out) == "deny"
