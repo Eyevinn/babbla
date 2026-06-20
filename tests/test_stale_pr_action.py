@@ -53,7 +53,7 @@ async def test_stale_present_posts_list_and_advances():
     assert len(poster.posts) == 1
     channel, text = poster.posts[0]
     assert channel == "C0XXXXXXXXX"
-    assert "MyTV" in text and "14d" in text
+    assert text.startswith("🧹 *MyTV — 1 open PRs idle ≥ 14d*")   # exact header glyphs + count + threshold
     assert "<https://github.com/Wkkkkk/MyTV/pull/42|#42>" in text
     assert "*fix thing*" in text and "30d" in text and "@bob" in text
     assert timer.advanced == [("stale-pr:MyTV", NOW.timestamp())]

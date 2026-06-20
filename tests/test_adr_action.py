@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from babbla.config import AdrConfig, ProjectBinding
 from babbla.digest.actions import AdrOfWeekAction
