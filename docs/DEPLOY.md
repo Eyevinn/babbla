@@ -161,6 +161,51 @@ Management (`subscribe`/`unsubscribe`/`list`) works as soon as the command is re
 The Personal Digest (delivered by DM) additionally requires a `personal_digest:` block in
 `config/channels.yaml` (see the commented example there).
 
+> **`files:write` scope (per-project skills):** if any project binding declares a `skills:`
+> list, the bot token additionally needs the `files:write` OAuth scope. Babbla uses it to
+> upload skill-produced artifacts back to the asking surface via `files_upload_v2`. Without
+> this scope the ask still answers normally — the artifact upload degrades to a logged no-op
+> rather than a failed interaction.
+
+---
+
+## Running Babbla in Docker (and per-project skills)
+
+The Agent SDK always drives the `claude` CLI subprocess — true for plain Q&A and
+for skills alike. So per-project skills add **no new runtime**; they reuse the
+same SDK→CLI path. Most of the container checklist is required for *any* Babbla
+deploy, not just skills:
+
+**Required for all of Babbla (not skills-specific):**
+- **Bundle the `claude` CLI** in the image (the SDK shells out to it; it is not
+  pure-Python). Pin a version compatible with the installed `claude-agent-sdk`.
+- **Auth, one of:** mount the Path-B subscription credentials into the
+  container's `$HOME/.claude` (read-only is fine), **or** set `ANTHROPIC_API_KEY`
+  (Path A — already supported; `ANTHROPIC_API_KEY` is intentionally optional in
+  `app.py`).
+- **GitHub MCP launcher:** set `BABBLA_GITHUB_MCP=binary` and install the
+  `github-mcp-server` binary in the image, so Babbla does **not** try to
+  `docker run` the MCP server from inside its own container (which would need
+  Docker-in-Docker). The skilled path reuses the same `mcp_servers`, so this one
+  setting covers both.
+- **Persist `CLAUDE_CONFIG_DIR`** (default `~/.claude`) on a writable volume that
+  survives restarts: thread-scoped conversation **resume** (ADR 0013) reads the
+  CLI's session transcripts from there. This matters for skilled *and*
+  non-skilled threads.
+
+**Skills-specific (small):**
+- **Writable scratch:** skills write to a per-thread scratch dir under `$TMPDIR`.
+  On a `--read-only` container, mount a `tmpfs` and point `TMPDIR` at it. The
+  scratch is wiped per ask, so it can be fully ephemeral.
+- **Bake `config/skills/` into the image** (like `config/channels.yaml`), or set
+  `BABBLA_SKILLS_POOL` to a mounted path. An unknown skill name fails fast at
+  config load, so a missing pool is loud, not silent.
+- **Slack `files:write`** scope (above) for artifact upload.
+
+**Isolation gets *better* in a container:** a clean image has no operator
+`~/.claude/CLAUDE.md` or user-global skills, so the skilled path's
+`setting_sources=["project"]` from a fresh scratch is airtight by construction.
+
 ---
 
 ## Auth note: subscription vs. API key
