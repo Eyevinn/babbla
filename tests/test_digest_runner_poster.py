@@ -176,3 +176,4 @@ async def test_adr_runner_digest_builds_prompt_and_returns_text():
     assert "Wkkkkk/MyTV" in p                                        # repo slug for links
     assert "github.com/Wkkkkk/MyTV" in p                             # asks for GitHub links
     assert "summary" in p.lower() and "list" in p.lower()            # summary + list structure
+    assert "preamble" in p.lower()                                   # told to omit chatty preamble/title

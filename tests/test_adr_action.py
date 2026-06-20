@@ -47,6 +47,10 @@ def _action(last, reader, runner):
     return action, timer, poster
 
 
+# Deterministic branded lead-in the action prepends (cadence "weekly", slug Wkkkkk/MyTV).
+LEAD = "Here's a weekly architecture decision record on *Wkkkkk/MyTV*"
+
+
 async def test_not_due_does_nothing():
     runner = FakeAdrRunner()
     action, timer, poster = _action(NOW.timestamp(), lambda p: _contents("0001-a.md"), runner)
@@ -60,7 +64,7 @@ async def test_first_run_backfills_all_and_advances():
     action, timer, poster = _action(None, reader, runner)
     await action.maybe_run(NOW)
     assert runner.calls == [["docs/adr/0001-a.md", "docs/adr/0002-b.md"]]   # all, sorted, README excluded
-    assert poster.posts == [("C0XXXXXXXXX", "DIGEST A")]
+    assert poster.posts == [("C0XXXXXXXXX", f"{LEAD}\n\nDIGEST A")]          # branded lead-in + agent body
     assert timer.advanced == [("adr:MyTV", NOW.timestamp())]
 
 
@@ -78,7 +82,7 @@ async def test_subsequent_run_posts_only_changed():
     action, timer, poster = _action(last, reader, runner)
     await action.maybe_run(NOW)
     assert runner.calls == [["docs/adr/0002-b.md"]]
-    assert poster.posts == [("C0XXXXXXXXX", "DIGEST B")]
+    assert poster.posts == [("C0XXXXXXXXX", f"{LEAD}\n\nDIGEST B")]
     assert timer.advanced == [("adr:MyTV", NOW.timestamp())]
 
 

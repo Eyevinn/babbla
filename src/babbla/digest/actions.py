@@ -231,5 +231,7 @@ class AdrDigestAction:
         # digest failure raises here -> scheduler catches it -> timer NOT advanced
         # -> retries the same window next bucket.
         text = await self._runner.digest(self._b, paths)
-        await self._poster.post(self._b.channel_id, text)
+        slug = f"{self._b.owner}/{self._b.repo}"
+        lead = f"Here's a {self._cadence} architecture decision record on *{slug}*"
+        await self._poster.post(self._b.channel_id, f"{lead}\n\n{text}")
         await self._timer.advance(self._key, now.timestamp())

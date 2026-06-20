@@ -47,10 +47,11 @@ class AdrRunner:
         prompt = (
             f"Read each of these Architecture Decision Records in the repository {slug}:\n"
             f"{listing}\n\n"
-            f"Write a Slack post in two parts: (1) a short opening summary paragraph "
+            f"Write the body of a Slack post in two parts: (1) a short opening summary paragraph "
             f"synthesizing what these ADRs cover and why they matter; then (2) a bulleted "
             f"list with one bullet per ADR — a one-line gloss and its GitHub link. "
-            f"Keep it concise and Slack-friendly."
+            f"Output only that body — no preamble, no title line, no sign-off, and no surrounding "
+            f"code fences. Keep it concise and Slack-friendly."
         )
         answer = await self._agent.run_ask(prompt, binding, None)
         return answer.text
