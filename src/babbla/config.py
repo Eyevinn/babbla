@@ -17,6 +17,12 @@ _ANCHORS = {"branch", "deploy"}
 class Topic:
     name: str
     description: str
+    labels: tuple[str, ...] = ()   # PR labels that mark a change as in-topic
+    paths: tuple[str, ...] = ()    # glob patterns over changed file paths
+
+    @property
+    def has_signals(self) -> bool:
+        return bool(self.labels or self.paths)
 
 
 @dataclass(frozen=True)
@@ -150,6 +156,14 @@ def _parse_adr(name: str, raw: dict | None) -> "AdrConfig | None":
     return AdrConfig(cadence=ct[0], tz=ct[1], dir=str(raw.get("dir", "docs/adr")))
 
 
+def _parse_str_list(label: str, field: str, raw: object) -> tuple[str, ...]:
+    if raw is None:
+        return ()
+    if not isinstance(raw, list):
+        raise ValueError(f"{label}: {field} must be a list of strings")
+    return tuple(str(x) for x in raw)
+
+
 def _parse_topic(label: str, raw: dict | None) -> "Topic | None":
     if not raw:
         return None
@@ -157,7 +171,9 @@ def _parse_topic(label: str, raw: dict | None) -> "Topic | None":
     description = str(raw.get("description", "")).strip()
     if not name or not description:
         raise ValueError(f"{label}: topic requires both name and description")
-    return Topic(name=name, description=description)
+    labels = _parse_str_list(label, "topic.labels", raw.get("labels"))
+    paths = _parse_str_list(label, "topic.paths", raw.get("paths"))
+    return Topic(name=name, description=description, labels=labels, paths=paths)
 
 
 def _parse_digest(name: str, raw: dict | None) -> DigestConfig | None:

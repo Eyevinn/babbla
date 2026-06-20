@@ -169,3 +169,48 @@ def test_digest_topic_missing_description_raises(tmp_path):
     )
     with pytest.raises(ValueError, match="topic requires both name and description"):
         load_config(_write_cfg(tmp_path, body))
+
+
+_PROJECT_WITH_SIGNALS = (
+    "projects:\n"
+    "  - name: MyTV\n    owner: o\n    repo: MyTV\n    visibility: public\n"
+    "    channel_id: C1\n    dm: false\n"
+    "    digest:\n      cadence: weekly\n      tz: UTC\n      anchor: branch\n"
+    "      topic:\n        name: security\n        description: auth, secrets, CVEs\n"
+    "        labels: [security, area/auth]\n"
+    "        paths: ['src/babbla/access.py', 'src/babbla/**']\n"
+)
+
+
+def test_digest_topic_parses_labels_and_paths(tmp_path):
+    from babbla.config import load_config, Topic
+    cfg = load_config(_write_cfg(tmp_path, _PROJECT_WITH_SIGNALS))
+    topic = cfg.bindings[0].digest.topic
+    assert topic == Topic(
+        name="security", description="auth, secrets, CVEs",
+        labels=("security", "area/auth"),
+        paths=("src/babbla/access.py", "src/babbla/**"),
+    )
+    assert topic.has_signals is True
+
+
+def test_digest_topic_without_signals_has_empty_tuples(tmp_path):
+    from babbla.config import load_config
+    cfg = load_config(_write_cfg(tmp_path, _PROJECT_WITH_TOPIC))
+    topic = cfg.bindings[0].digest.topic
+    assert topic.labels == () and topic.paths == ()
+    assert topic.has_signals is False
+
+
+def test_digest_topic_labels_must_be_a_list(tmp_path):
+    import pytest
+    from babbla.config import load_config
+    body = (
+        "projects:\n  - name: MyTV\n    owner: o\n    repo: MyTV\n    visibility: public\n"
+        "    channel_id: C1\n    dm: false\n"
+        "    digest:\n      cadence: weekly\n      tz: UTC\n      anchor: branch\n"
+        "      topic:\n        name: security\n        description: auth\n"
+        "        labels: not-a-list\n"
+    )
+    with pytest.raises(ValueError, match="topic.labels must be a list of strings"):
+        load_config(_write_cfg(tmp_path, body))
