@@ -18,6 +18,8 @@ class Change:
     sha: str
     subject: str
     pr_number: int | None
+    labels: tuple[str, ...] = ()   # populated only by enrichment
+    paths: tuple[str, ...] = ()    # changed file paths, populated only by enrichment
 
 
 def make_get_json(token: str, api_base: str = "https://api.github.com") -> Callable[[str], object | None]:
