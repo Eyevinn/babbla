@@ -146,18 +146,21 @@ configured channel (`C0XXXXXXXXX`) and confirm a reply arrives.
 
 ---
 
-### Personal subscriptions (`/babbla`)
+### Personal subscriptions
 
-To enable the personal-subscription command, add a slash command to the Slack app manifest:
+Users manage their subscriptions by **DMing Babbla in plain language** — "follow MyTV",
+"what am I following?", "make my digest weekly", "only show me security in MyTV". This works
+out of the box; no Slack-app change is required (the natural-language intent classifier is
+always wired).
 
-- **Command:** `/babbla`
-- **Usage hint:** `subscribe <project> | unsubscribe <project> | list | digest daily|weekly|off`
-- **Should escape channels/users:** no
-- Requires the `commands` OAuth scope.
-
-Management (`subscribe`/`unsubscribe`/`list`) works as soon as the command is registered.
 The Personal Digest (delivered by DM) additionally requires a `personal_digest:` block in
 `config/channels.yaml` (see the commented example there).
+
+> **Optional `/babbla` slash command.** The code also ships an equivalent
+> `/babbla subscribe|unsubscribe|list|digest` handler, but it does **not** fire unless you
+> register a `/babbla` slash command in the Slack app (Socket Mode, no request URL; adds the
+> `commands` scope). It is redundant with the plain-language DM path above, so registering it
+> is optional.
 
 > **`files:write` scope (per-project skills):** if any project binding declares a `skills:`
 > list, the bot token additionally needs the `files:write` OAuth scope. Babbla uses it to
