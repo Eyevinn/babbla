@@ -144,3 +144,49 @@ async def test_topic_empty_advances_but_does_not_post(monkeypatch):
     assert runner.calls == [("MyTV", "security")]            # topic threaded through
     assert poster.posts == []                                # silent: empty summary
     assert store.advanced == [("C0XXXXXXXXX", "H", NOW.timestamp())]   # but watermark advanced
+
+
+class CaptureRunner:
+    def __init__(self): self.changes = None
+    async def summarize(self, binding, changes, head_sha, topic=None):
+        self.changes = changes            # capture what the action handed us
+        return "SUMMARY"
+
+
+async def test_action_enriches_when_topic_has_signals(monkeypatch):
+    binding = ProjectBinding(
+        "MyTV", "o", "r", "public", "C0XXXXXXXXX", False,
+        DigestConfig("weekly", "UTC", "branch", None,
+                     Topic("security", "auth", labels=("security",))),
+    )
+    enriched = [Change("c1", "feat (#1)", 1, labels=("security",))]
+    seen = {}
+    def fake_enrich(owner, repo, changes, topic, *, get_json):
+        seen["called"] = (owner, repo, topic.name)
+        return enriched
+    monkeypatch.setattr(A, "enrich_changes", fake_enrich)
+    monkeypatch.setattr(A, "current_head", lambda b, *, get_json: "H")
+    monkeypatch.setattr(A, "changes_between", lambda o, r, base, hd, *, get_json: [Change("c1", "feat (#1)", 1)])
+    monkeypatch.setattr(A, "changes_since", lambda o, r, since, *, get_json: [Change("c1", "feat (#1)", 1)])
+    store, runner, poster = FakeStore(DigestState(None, None)), CaptureRunner(), FakePoster()
+    action = PerProjectDigestAction(binding, store, lambda path: None, runner, poster)
+    await action.maybe_run(NOW)
+    assert seen["called"] == ("o", "r", "security")     # enrichment ran
+    assert runner.changes == enriched                   # runner got enriched changes
+
+
+async def test_action_skips_enrichment_without_signals(monkeypatch):
+    binding = ProjectBinding(
+        "MyTV", "o", "r", "public", "C0XXXXXXXXX", False,
+        DigestConfig("weekly", "UTC", "branch", None, Topic("security", "auth")),
+    )
+    def boom(*a, **k):
+        raise AssertionError("enrich_changes must not be called without signals")
+    monkeypatch.setattr(A, "enrich_changes", boom)
+    monkeypatch.setattr(A, "current_head", lambda b, *, get_json: "H")
+    monkeypatch.setattr(A, "changes_between", lambda o, r, base, hd, *, get_json: [Change("c1", "x", None)])
+    monkeypatch.setattr(A, "changes_since", lambda o, r, since, *, get_json: [Change("c1", "x", None)])
+    store, runner, poster = FakeStore(DigestState(None, None)), CaptureRunner(), FakePoster()
+    action = PerProjectDigestAction(binding, store, lambda path: None, runner, poster)
+    await action.maybe_run(NOW)   # must not raise
+    assert runner.changes == [Change("c1", "x", None)]

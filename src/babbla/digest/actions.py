@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from babbla.access import is_open_tier
 from babbla.blocks import delete_button_blocks
 from babbla.digest.anchors import changes_between, changes_since, current_head, head_for
+from babbla.digest.topics_match import enrich_changes
 from babbla.digest.cadence import is_due
 from babbla.digest.pulls import stale_prs
 from babbla.digest.adr import changed_adrs
@@ -49,7 +50,12 @@ class PerProjectDigestAction:
 
     async def _emit(self, changes, head: str, now: datetime) -> None:
         if changes:
-            text = await self._runner.summarize(self._b, changes, head, topic=self._b.digest.topic)
+            topic = self._b.digest.topic
+            if topic and topic.has_signals:
+                changes = enrich_changes(
+                    self._b.owner, self._b.repo, changes, topic, get_json=self._get_json
+                )
+            text = await self._runner.summarize(self._b, changes, head, topic=topic)
             if text.strip():
                 slug = f"{self._b.owner}/{self._b.repo}"
                 lead = f"Here's a {self._b.digest.cadence} update summary on *{slug}*"
