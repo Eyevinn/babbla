@@ -12,7 +12,7 @@ from slack_sdk.web.async_client import AsyncWebClient  # noqa: F401  (type only;
 from babbla.agent_runner import AgentRunner, Secrets
 from babbla.config import load_config
 from babbla.digest.actions import (
-    AdrOfWeekAction, PerProjectDigestAction, PersonalDigestAction, QuizAction, StalePRAction,
+    AdrDigestAction, PerProjectDigestAction, PersonalDigestAction, QuizAction, StalePRAction,
 )
 from babbla.digest.adr import AdrRunner
 from babbla.digest.anchors import make_get_json
@@ -25,7 +25,7 @@ from babbla.personal import make_intent_fn
 from babbla.orchestrator import Orchestrator
 from babbla.read_only import DEFAULT_MODEL
 from babbla.session_store import (
-    ActionCursorStore, ActionTimerStore, DigestStateStore, LobbyThreadStore,
+    ActionTimerStore, DigestStateStore, LobbyThreadStore,
     PersonalDigestStateStore, PersonalSubStore, SessionStore,
 )
 from babbla.slack_adapter import register_handlers
@@ -94,7 +94,6 @@ def build_scheduler(*, config, secrets: Secrets, db_path: str, client) -> Action
         actions.append(PerProjectDigestAction(b, digest_store, get_json, digest_runner, poster))
     for b in config.quiz_bindings():
         actions.append(QuizAction(b, timer_store, quiz_runner, poster, b.quiz.cadence, b.quiz.tz, b.quiz.count))
-    cursor_store = ActionCursorStore(db_path)
     adr_runner = AdrRunner(AgentRunner(secrets))
     for b in config.stale_pr_bindings():
         actions.append(StalePRAction(
@@ -103,8 +102,8 @@ def build_scheduler(*, config, secrets: Secrets, db_path: str, client) -> Action
             b.stale_prs.threshold_days, b.stale_prs.include_drafts,
         ))
     for b in config.adr_bindings():
-        actions.append(AdrOfWeekAction(
-            b, timer_store, cursor_store, get_json, adr_runner, poster,
+        actions.append(AdrDigestAction(
+            b, timer_store, get_json, adr_runner, poster,
             b.adr.cadence, b.adr.tz, b.adr.dir,
         ))
     if config.personal_digest is not None:

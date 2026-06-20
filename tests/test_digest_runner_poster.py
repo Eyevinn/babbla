@@ -167,11 +167,12 @@ async def test_summarize_shared_topic_injects_preamble_and_sentinel_empties():
 from babbla.digest.adr import AdrRunner
 
 
-async def test_adr_runner_builds_prompt_and_returns_text():
-    agent = SentinelAgent("TEASER TEXT")
-    out = await AdrRunner(agent).teaser(_binding(), "docs/adr/0003-read-only.md")
-    assert out == "TEASER TEXT"
+async def test_adr_runner_digest_builds_prompt_and_returns_text():
+    agent = SentinelAgent("DIGEST TEXT")
+    out = await AdrRunner(agent).digest(_binding(), ["docs/adr/0001-a.md", "docs/adr/0002-b.md"])
+    assert out == "DIGEST TEXT"
     p = agent.prompt
-    assert "docs/adr/0003-read-only.md" in p
-    assert "Wkkkkk/MyTV" in p                       # repo slug for the GitHub link
-    assert "github.com/Wkkkkk/MyTV" in p            # asks for a link back to the ADR
+    assert "docs/adr/0001-a.md" in p and "docs/adr/0002-b.md" in p   # all paths in the prompt
+    assert "Wkkkkk/MyTV" in p                                        # repo slug for links
+    assert "github.com/Wkkkkk/MyTV" in p                             # asks for GitHub links
+    assert "summary" in p.lower() and "list" in p.lower()            # summary + list structure

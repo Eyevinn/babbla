@@ -33,19 +33,24 @@ def changed_adrs(owner, repo, dir, *, since, get_json) -> list[str]:
 
 
 class AdrRunner:
-    """Thin read-only wrapper around AgentRunner that turns one ADR file into a short,
-    engaging Slack teaser. Mirrors QuizRunner in shape."""
+    """Thin read-only wrapper around AgentRunner that turns a set of changed ADRs into a
+    Slack digest: an opening summary paragraph plus a per-ADR list. Mirrors QuizRunner in shape."""
 
     def __init__(self, agent_runner) -> None:
         self._agent = agent_runner
 
-    async def teaser(self, binding: ProjectBinding, adr_path: str) -> str:
+    async def digest(self, binding: ProjectBinding, adr_paths: list[str]) -> str:
         slug = f"{binding.owner}/{binding.repo}"
+        listing = "\n".join(
+            f"- {p}  (link: https://github.com/{slug}/blob/HEAD/{p})" for p in adr_paths
+        )
         prompt = (
-            f"Read the single file at {adr_path} in the repository {slug}. Write one short, "
-            f"engaging paragraph for a Slack channel: what the architectural decision was and "
-            f"why it mattered. End with a link to the ADR on GitHub "
-            f"(https://github.com/{slug}/blob/HEAD/{adr_path}). Keep it concise and Slack-friendly."
+            f"Read each of these Architecture Decision Records in the repository {slug}:\n"
+            f"{listing}\n\n"
+            f"Write a Slack post in two parts: (1) a short opening summary paragraph "
+            f"synthesizing what these ADRs cover and why they matter; then (2) a bulleted "
+            f"list with one bullet per ADR — a one-line gloss and its GitHub link. "
+            f"Keep it concise and Slack-friendly."
         )
         answer = await self._agent.run_ask(prompt, binding, None)
         return answer.text

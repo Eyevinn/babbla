@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import logging
-import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from babbla.access import is_open_tier
 from babbla.blocks import delete_button_blocks
 from babbla.digest.anchors import changes_between, changes_since, current_head, head_for
 from babbla.digest.cadence import is_due
 from babbla.digest.pulls import stale_prs
+from babbla.digest.adr import changed_adrs
 
 logger = logging.getLogger(__name__)
 
@@ -201,15 +201,11 @@ class StalePRAction:
         return "\n".join(lines)
 
 
-_ADR_RE = re.compile(r"^\d{4}-.*\.md$")
-
-
-class AdrOfWeekAction:
-    def __init__(self, binding, timer, cursor, get_json, runner, poster,
+class AdrDigestAction:
+    def __init__(self, binding, timer, get_json, runner, poster,
                  cadence: str, tz: str, dir: str) -> None:
         self._b = binding
         self._timer = timer
-        self._cursor = cursor
         self._get_json = get_json
         self._runner = runner
         self._poster = poster
@@ -224,25 +220,16 @@ class AdrOfWeekAction:
         last = await self._timer.get(self._key)
         if not is_due(now, last, self._cadence, self._tz):
             return
-        entries = self._get_json(f"/repos/{self._b.owner}/{self._b.repo}/contents/{self._dir}")
-        names = sorted(
-            e["name"] for e in (entries or []) if _ADR_RE.match(e.get("name", ""))
+        since = None if last is None else datetime.fromtimestamp(last, tz=timezone.utc)
+        paths = changed_adrs(
+            self._b.owner, self._b.repo, self._dir, since=since, get_json=self._get_json
         )
-        if not names:
-            # No ADRs (or no docs/adr): stay quiet, but advance so we check once per period.
+        if not paths:
+            # Nothing changed (or no ADRs): stay quiet, advance once per period.
             await self._timer.advance(self._key, now.timestamp())
             return
-        chosen = self._next(names, await self._cursor.get(self._key))
-        # Teaser failure raises here -> scheduler catches it -> cursor/timer NOT advanced
-        # -> retries the same ADR next tick.
-        text = await self._runner.teaser(self._b, f"{self._dir}/{chosen}")
+        # digest failure raises here -> scheduler catches it -> timer NOT advanced
+        # -> retries the same window next bucket.
+        text = await self._runner.digest(self._b, paths)
         await self._poster.post(self._b.channel_id, text)
-        await self._cursor.set(self._key, chosen)
         await self._timer.advance(self._key, now.timestamp())
-
-    @staticmethod
-    def _next(names: list[str], cursor: str | None) -> str:
-        # Next ADR after the cursor; wrap to first when cursor is last, absent, or stale.
-        if cursor in names:
-            return names[(names.index(cursor) + 1) % len(names)]
-        return names[0]

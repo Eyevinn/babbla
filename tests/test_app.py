@@ -165,7 +165,7 @@ def test_build_scheduler_inert_when_nothing_configured(tmp_path):
     assert sched._actions == ()
 
 
-from babbla.digest.actions import StalePRAction, AdrOfWeekAction
+from babbla.digest.actions import StalePRAction, AdrDigestAction
 
 
 def test_build_scheduler_assembles_stale_pr_and_adr(tmp_path):
@@ -182,7 +182,7 @@ def test_build_scheduler_assembles_stale_pr_and_adr(tmp_path):
         config=config, secrets=load_secrets(ENV), db_path=str(tmp_path / "s.db"), client=object()
     )
     kinds = sorted(type(a).__name__ for a in sched._actions)
-    assert kinds == ["AdrOfWeekAction", "StalePRAction"]
+    assert kinds == ["AdrDigestAction", "StalePRAction"]
 
 
 def test_build_scheduler_stale_pr_only(tmp_path):
@@ -211,5 +211,5 @@ def test_build_scheduler_inert_includes_no_new_actions(tmp_path):
         config=config, secrets=load_secrets(ENV), db_path=str(tmp_path / "s.db"), client=object()
     )
     names = [type(a).__name__ for a in sched._actions]
-    assert "StalePRAction" not in names and "AdrOfWeekAction" not in names
+    assert "StalePRAction" not in names and "AdrDigestAction" not in names
     assert sched._actions == ()
