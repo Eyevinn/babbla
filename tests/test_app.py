@@ -239,7 +239,7 @@ def test_run_preflight_warns_for_unreachable_and_does_not_raise(tmp_path, caplog
     def gj(path):
         return {"x": 1} if "MyTV" in path else None   # Secret unreachable
 
-    with caplog.at_level(logging.WARNING):
+    with caplog.at_level(logging.WARNING, logger="babbla.app"):
         checks = run_preflight(config, get_json=gj, env={})
 
     assert [c.reachable for c in checks] == [True, False]
@@ -262,7 +262,7 @@ def test_run_preflight_swallows_get_json_errors(tmp_path, caplog):
     def gj(path):
         raise RuntimeError("network down")
 
-    with caplog.at_level(logging.WARNING):
+    with caplog.at_level(logging.WARNING, logger="babbla.app"):
         checks = run_preflight(config, get_json=gj, env={})
 
     assert all(not c.reachable for c in checks)   # nothing raised out of run_preflight

@@ -44,3 +44,14 @@ def test_missing_token_exits_two(tmp_path, monkeypatch, capsys):
     err = capsys.readouterr().err
     assert code == 2
     assert "GITHUB_TOKEN" in err
+
+
+def test_missing_token_exits_two_even_without_config(tmp_path, monkeypatch, capsys):
+    # Token is guarded before load_config, so a missing token returns a clean
+    # exit 2 rather than a load_config stack trace when the config is also absent.
+    monkeypatch.setenv("BABBLA_CONFIG", str(tmp_path / "does-not-exist.yaml"))
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    code = main([])
+    err = capsys.readouterr().err
+    assert code == 2
+    assert "GITHUB_TOKEN" in err
