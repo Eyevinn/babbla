@@ -7,6 +7,7 @@ from babbla.access import is_open_tier
 from babbla.blocks import delete_button_blocks
 from babbla.digest.anchors import changes_between, changes_since, current_head, head_for
 from babbla.digest.cadence import is_due
+from babbla.digest.pulls import stale_prs
 
 logger = logging.getLogger(__name__)
 
@@ -154,3 +155,46 @@ class QuizAction:
         if answers.strip():
             await self._poster.post(self._b.channel_id, answers.strip(), thread_ts=ts)
         await self._timer.advance(self._key, now.timestamp())
+
+
+class StalePRAction:
+    _MAX = 20
+
+    def __init__(self, binding, timer, get_json, poster, cadence: str, tz: str,
+                 threshold_days: int, include_drafts: bool) -> None:
+        self._b = binding
+        self._timer = timer
+        self._get_json = get_json
+        self._poster = poster
+        self._cadence = cadence
+        self._tz = tz
+        self._threshold_days = threshold_days
+        self._include_drafts = include_drafts
+        self._key = f"stale-pr:{binding.name}"
+        self.project = binding.name
+        self.label = self._key
+
+    async def maybe_run(self, now: datetime) -> None:
+        last = await self._timer.get(self._key)
+        if not is_due(now, last, self._cadence, self._tz):
+            return
+        prs = stale_prs(
+            self._b.owner, self._b.repo, now=now,
+            threshold_days=self._threshold_days,
+            include_drafts=self._include_drafts, get_json=self._get_json,
+        )
+        if prs:
+            await self._poster.post(self._b.channel_id, self._render(prs))
+        # Always advance: one check per cadence bucket, never per-tick. No watermark —
+        # staleness is recomputed each period from live updated_at.
+        await self._timer.advance(self._key, now.timestamp())
+
+    def _render(self, prs) -> str:
+        lines = [f"🧹 *{self._b.repo} — {len(prs)} open PRs idle ≥ {self._threshold_days}d*"]
+        for pr in prs[: self._MAX]:
+            lines.append(
+                f"• <{pr.url}|#{pr.number}> *{pr.title}* — idle {pr.idle_days}d, @{pr.author}"
+            )
+        if len(prs) > self._MAX:
+            lines.append(f"…and {len(prs) - self._MAX} more")
+        return "\n".join(lines)

@@ -36,6 +36,14 @@ class QuizConfig:
 
 
 @dataclass(frozen=True)
+class StalePRConfig:
+    cadence: str          # daily | weekly
+    tz: str
+    threshold_days: int = 14
+    include_drafts: bool = False
+
+
+@dataclass(frozen=True)
 class ProjectBinding:
     name: str
     owner: str
@@ -45,6 +53,7 @@ class ProjectBinding:
     dm: bool
     digest: DigestConfig | None = None
     quiz: QuizConfig | None = None
+    stale_prs: "StalePRConfig | None" = None
 
 
 @dataclass(frozen=True)
