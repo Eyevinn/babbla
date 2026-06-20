@@ -10,5 +10,6 @@ services:
     environment:
       BABBLA_CONFIG: /data/channels.yaml
       BABBLA_DB: /state/babbla.db
+      BABBLA_SKILLS_POOL: /data/skills   # skills are under the read-only config mount, not /app
 volumes:
   babbla-state:

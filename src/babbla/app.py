@@ -11,7 +11,7 @@ from slack_sdk.web.async_client import AsyncWebClient  # noqa: F401  (type only;
 
 from babbla.agent_runner import AgentRunner, Secrets
 from babbla.config import load_config
-from babbla.doctor import check_access
+from babbla.doctor import check_access, check_skills
 from babbla.digest.actions import (
     AdrDigestAction, PerProjectDigestAction, PersonalDigestAction, QuizAction, StalePRAction,
 )
@@ -136,6 +136,27 @@ def run_preflight(config, *, get_json, env=None):
     return checks
 
 
+def run_skills_preflight(config, *, skills_pool, env=None):
+    """Skill-staging preflight: WARN per skill the runtime pool can't stage.
+
+    Mirrors run_preflight. ``load_config`` already validates skills against the
+    config-dir pool and raises; this checks the *runtime* pool
+    (``secrets.skills_pool``) that ``_stage_skills`` actually copies from, so a
+    deploy/mount mismatch — e.g. a container that forgot ``BABBLA_SKILLS_POOL``
+    — surfaces at boot instead of as a silent ask-time failure. Never raises;
+    returns the checks, or None when skipped.
+    """
+    env = os.environ if env is None else env
+    if env.get("BABBLA_SKIP_PREFLIGHT"):
+        logger.info("Skills preflight skipped (BABBLA_SKIP_PREFLIGHT set)")
+        return None
+    checks = check_skills(config, skills_pool=skills_pool)
+    for c in checks:
+        if not c.present:
+            logger.warning("Preflight: skill %r for %s not stageable: %s", c.skill, c.name, c.detail)
+    return checks
+
+
 async def main() -> None:
     logging.basicConfig(level=logging.INFO)
     from slack_bolt.async_app import AsyncApp
@@ -146,6 +167,7 @@ async def main() -> None:
     db_path = os.environ.get("BABBLA_DB", "babbla.db")
     config = load_config(config_path)
     run_preflight(config, get_json=make_get_json(secrets.github_token))
+    run_skills_preflight(config, skills_pool=secrets.skills_pool)
     orchestrator = build_orchestrator(config_path=config_path, db_path=db_path, secrets=secrets)
 
     app = AsyncApp(token=os.environ["SLACK_BOT_TOKEN"])

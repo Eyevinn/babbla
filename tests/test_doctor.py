@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from babbla.doctor import RepoCheck, check_access
+from babbla.doctor import RepoCheck, SkillCheck, check_access, check_skills
 
 
 @dataclass(frozen=True)
@@ -8,6 +8,7 @@ class _B:
     name: str
     owner: str
     repo: str
+    skills: tuple = ()
 
 
 @dataclass(frozen=True)
@@ -81,3 +82,49 @@ def test_mixed_results_one_bad_repo_does_not_abort_sweep():
 
 def test_empty_config_is_empty_result():
     assert check_access(_cfg(), get_json=lambda p: {"x": 1}) == []
+
+
+# ---------------------------------------------------------------------------
+# check_skills tests
+# ---------------------------------------------------------------------------
+
+def _make_skill(pool, name):
+    (pool / name).mkdir(parents=True)
+    (pool / name / "SKILL.md").write_text("# skill")
+
+
+def test_check_skills_present(tmp_path):
+    _make_skill(tmp_path, "architecture-diagram")
+    cfg = _cfg(_B("Babbla", "Eyevinn", "babbla", skills=("architecture-diagram",)))
+    out = check_skills(cfg, skills_pool=str(tmp_path))
+    assert out == [SkillCheck("Babbla", "architecture-diagram", True, "ok")]
+
+
+def test_check_skills_missing_points_at_expected_path(tmp_path):
+    cfg = _cfg(_B("Babbla", "Eyevinn", "babbla", skills=("architecture-diagram",)))
+    out = check_skills(cfg, skills_pool=str(tmp_path))
+    assert len(out) == 1
+    c = out[0]
+    assert (c.name, c.skill, c.present) == ("Babbla", "architecture-diagram", False)
+    assert str(tmp_path / "architecture-diagram" / "SKILL.md") in c.detail
+
+
+def test_check_skills_dir_without_skill_md_is_missing(tmp_path):
+    (tmp_path / "half-baked").mkdir()   # dir exists but no SKILL.md
+    cfg = _cfg(_B("P", "o", "r", skills=("half-baked",)))
+    out = check_skills(cfg, skills_pool=str(tmp_path))
+    assert [(c.skill, c.present) for c in out] == [("half-baked", False)]
+
+
+def test_check_skills_only_covers_bindings_with_skills(tmp_path):
+    cfg = _cfg(
+        _B("MyTV", "Wkkkkk", "MyTV"),                               # no skills
+        _B("Babbla", "Eyevinn", "babbla", skills=("missing",)),
+    )
+    out = check_skills(cfg, skills_pool=str(tmp_path))
+    assert [c.name for c in out] == ["Babbla"]   # MyTV contributes nothing
+
+
+def test_check_skills_empty_when_no_skills_anywhere(tmp_path):
+    cfg = _cfg(_B("MyTV", "Wkkkkk", "MyTV"))
+    assert check_skills(cfg, skills_pool=str(tmp_path)) == []

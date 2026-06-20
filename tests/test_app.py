@@ -259,6 +259,58 @@ def test_run_preflight_swallows_get_json_errors(tmp_path, caplog):
     assert all(not c.reachable for c in checks)   # nothing raised out of run_preflight
 
 
+def _cfg_with_skill(tmp_path, skills_subdir="skills"):
+    """A config whose Babbla binding references the 'architecture-diagram' skill.
+
+    load_config validates skills against <config dir>/skills, so that pool must
+    hold the skill for the config to load at all; the runtime pool checked by
+    run_skills_preflight is passed separately.
+    """
+    pool = tmp_path / skills_subdir / "architecture-diagram"
+    pool.mkdir(parents=True)
+    (pool / "SKILL.md").write_text("# skill")
+    cfg = tmp_path / "channels.yaml"
+    cfg.write_text(
+        "projects:\n"
+        "  - name: Babbla\n    owner: Eyevinn\n    repo: babbla\n"
+        "    visibility: public\n    channel_id: C1\n    dm: false\n"
+        "    skills: [architecture-diagram]\n"
+    )
+    return load_config(str(cfg))
+
+
+def test_run_skills_preflight_warns_for_runtime_pool_mismatch(tmp_path, caplog):
+    from babbla.app import run_skills_preflight
+    config = _cfg_with_skill(tmp_path)   # skill exists under <config dir>/skills
+
+    # Runtime pool points elsewhere (the exact container bug): empty dir.
+    runtime_pool = tmp_path / "elsewhere"
+    runtime_pool.mkdir()
+    with caplog.at_level(logging.WARNING, logger="babbla.app"):
+        checks = run_skills_preflight(config, skills_pool=str(runtime_pool), env={})
+
+    assert [c.present for c in checks] == [False]
+    assert "architecture-diagram" in caplog.text
+    assert "Babbla" in caplog.text
+
+
+def test_run_skills_preflight_silent_when_pool_matches(tmp_path, caplog):
+    from babbla.app import run_skills_preflight
+    config = _cfg_with_skill(tmp_path)
+    with caplog.at_level(logging.WARNING, logger="babbla.app"):
+        checks = run_skills_preflight(config, skills_pool=str(tmp_path / "skills"), env={})
+    assert [c.present for c in checks] == [True]
+    assert caplog.text == ""   # present skills do not warn
+
+
+def test_run_skills_preflight_skipped_returns_none(tmp_path):
+    from babbla.app import run_skills_preflight
+    config = _cfg_with_skill(tmp_path)
+    assert run_skills_preflight(
+        config, skills_pool=str(tmp_path / "nope"), env={"BABBLA_SKIP_PREFLIGHT": "1"}
+    ) is None
+
+
 def test_load_secrets_default_skills_pool():
     from babbla.app import load_secrets
     env = {"SLACK_BOT_TOKEN": "x", "SLACK_APP_TOKEN": "y", "GITHUB_TOKEN": "z"}

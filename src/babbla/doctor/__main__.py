@@ -5,13 +5,16 @@ import os
 import sys
 
 from babbla.config import load_config
-from babbla.doctor import check_access
+from babbla.doctor import check_access, check_skills
 
 
 def main(argv: list[str] | None = None, get_json=None) -> int:
     parser = argparse.ArgumentParser(
         prog="babbla-doctor",
-        description="Check that the configured GitHub token can read every configured repo.",
+        description=(
+            "Check that the configured GitHub token can read every configured "
+            "repo, and that every bound skill is stageable from the skills pool."
+        ),
     )
     parser.parse_args(argv)
 
@@ -34,7 +37,15 @@ def main(argv: list[str] | None = None, get_json=None) -> int:
         marker = "ok" if c.reachable else "UNREACHABLE"
         print(f"[{marker}] {c.name} ({c.slug}): {c.detail}")
 
-    return 0 if all(c.reachable for c in checks) else 1
+    # Skills are checked against the same runtime pool agent_runner stages from.
+    skills_pool = os.environ.get("BABBLA_SKILLS_POOL", "config/skills")
+    skill_checks = check_skills(config, skills_pool=skills_pool)
+    for s in skill_checks:
+        marker = "ok" if s.present else "MISSING"
+        print(f"[{marker}] {s.name} skill {s.skill!r}: {s.detail}")
+
+    ok = all(c.reachable for c in checks) and all(s.present for s in skill_checks)
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":

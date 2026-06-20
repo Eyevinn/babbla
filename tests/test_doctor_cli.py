@@ -55,3 +55,37 @@ def test_missing_token_exits_two_even_without_config(tmp_path, monkeypatch, caps
     err = capsys.readouterr().err
     assert code == 2
     assert "GITHUB_TOKEN" in err
+
+
+def _write_cfg_with_skill(tmp_path):
+    pool = tmp_path / "skills" / "architecture-diagram"
+    pool.mkdir(parents=True)
+    (pool / "SKILL.md").write_text("# skill")
+    p = tmp_path / "channels.yaml"
+    p.write_text(
+        "projects:\n"
+        "  - name: Babbla\n    owner: Eyevinn\n    repo: babbla\n"
+        "    visibility: public\n    channel_id: C1\n    dm: false\n"
+        "    skills: [architecture-diagram]\n"
+    )
+    return str(p)
+
+
+def test_skill_present_reported_and_exits_zero(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("BABBLA_CONFIG", _write_cfg_with_skill(tmp_path))
+    monkeypatch.setenv("BABBLA_SKILLS_POOL", str(tmp_path / "skills"))
+    code = main([], get_json=lambda path: {"full_name": path})
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "architecture-diagram" in out
+
+
+def test_skill_missing_from_runtime_pool_exits_one(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("BABBLA_CONFIG", _write_cfg_with_skill(tmp_path))
+    # Runtime pool diverges from the config-dir pool — repos all fine, skill not.
+    monkeypatch.setenv("BABBLA_SKILLS_POOL", str(tmp_path / "elsewhere"))
+    code = main([], get_json=lambda path: {"full_name": path})
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "architecture-diagram" in out
+    assert "MISSING" in out
