@@ -479,6 +479,7 @@ async def test_dispatch_topic_remove_idempotent(store, psub):
 class ArtifactRunner:
     def __init__(self):
         self.scratch_keys = []
+
     async def run_ask(self, text, binding, resume_session_id, *, scratch_key=None):
         self.scratch_keys.append(scratch_key)
         return CitedAnswer(text="drew it", session_id="s1",

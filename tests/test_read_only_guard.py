@@ -177,6 +177,7 @@ def test_skilled_build_keeps_readers_only_allowed_tools():
         assert builtin not in cfg.allowed_tools
     for writer in AGENTMEMORY_WRITERS:
         assert writer not in cfg.allowed_tools
+    assert _cfg(skills=("architecture-diagram",), agentmemory_url="").allowed_tools == (GITHUB_WILDCARD,)
 
 
 def test_skill_loading_kwargs_shape(tmp_path):
