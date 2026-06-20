@@ -94,6 +94,12 @@ class Config:
     def quiz_bindings(self) -> tuple[ProjectBinding, ...]:
         return tuple(b for b in self.bindings if b.quiz is not None and b.channel_id)
 
+    def stale_pr_bindings(self) -> tuple[ProjectBinding, ...]:
+        return tuple(b for b in self.bindings if b.stale_prs is not None and b.channel_id)
+
+    def adr_bindings(self) -> tuple[ProjectBinding, ...]:
+        return tuple(b for b in self.bindings if b.adr is not None and b.channel_id)
+
 
 def _parse_cadence_tz(label: str, raw: dict | None, kind: str):
     """Shared cadence+tz parse for the quiz block. Returns (cadence, tz) or None."""
@@ -121,6 +127,27 @@ def _parse_quiz(name: str, raw: dict | None) -> QuizConfig | None:
     if not isinstance(count, int) or isinstance(count, bool) or count < 1:
         raise ValueError(f"{name}: quiz.count must be a positive integer, got {count!r}")
     return QuizConfig(cadence=ct[0], tz=ct[1], count=count)
+
+
+def _parse_stale_prs(name: str, raw: dict | None) -> "StalePRConfig | None":
+    ct = _parse_cadence_tz(name, raw, "stale_prs")
+    if ct is None:
+        return None
+    threshold = raw.get("threshold_days", 14)
+    if not isinstance(threshold, int) or isinstance(threshold, bool) or threshold < 1:
+        raise ValueError(
+            f"{name}: stale_prs.threshold_days must be a positive integer, got {threshold!r}"
+        )
+    include_drafts = bool(raw.get("include_drafts", False))
+    return StalePRConfig(cadence=ct[0], tz=ct[1], threshold_days=threshold,
+                         include_drafts=include_drafts)
+
+
+def _parse_adr(name: str, raw: dict | None) -> "AdrConfig | None":
+    ct = _parse_cadence_tz(name, raw, "adr")
+    if ct is None:
+        return None
+    return AdrConfig(cadence=ct[0], tz=ct[1], dir=str(raw.get("dir", "docs/adr")))
 
 
 def _parse_topic(label: str, raw: dict | None) -> "Topic | None":
@@ -189,6 +216,8 @@ def load_config(path: str | os.PathLike) -> Config:
             dm=bool(p.get("dm", False)),
             digest=_parse_digest(p["name"], p.get("digest")),
             quiz=_parse_quiz(p["name"], p.get("quiz")),
+            stale_prs=_parse_stale_prs(p["name"], p.get("stale_prs")),
+            adr=_parse_adr(p["name"], p.get("adr")),
         )
         for p in raw.get("projects", [])
     )

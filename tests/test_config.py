@@ -4,7 +4,10 @@ import logging
 
 import pytest
 
-from babbla.config import Config, ProjectBinding, load_config, QuizConfig, PersonalDigestConfig
+from babbla.config import (
+    Config, ProjectBinding, load_config, QuizConfig, PersonalDigestConfig,
+    StalePRConfig, AdrConfig,
+)
 
 FIXTURE = """
 projects:
@@ -161,3 +164,98 @@ def test_personal_digest_invalid_tz_raises(tmp_path):
     body = _PROJECT + "personal_digest:\n  default_cadence: weekly\n  tz: Mars/Phobos\n"
     with pytest.raises(ValueError, match="time zone"):
         load_config(_write(tmp_path, body))
+
+
+STALE_PR_FIXTURE = """
+projects:
+  - name: MyTV
+    owner: Wkkkkk
+    repo: MyTV
+    visibility: public
+    channel_id: C123
+    dm: true
+    stale_prs:
+      cadence: weekly
+      tz: Europe/Stockholm
+      threshold_days: 21
+      include_drafts: true
+"""
+
+ADR_FIXTURE = """
+projects:
+  - name: MyTV
+    owner: Wkkkkk
+    repo: MyTV
+    visibility: public
+    channel_id: C123
+    dm: true
+    adr:
+      cadence: weekly
+      tz: Europe/Stockholm
+"""
+
+
+def test_stale_prs_parsed(tmp_path):
+    cfg = load_config(_write(tmp_path, STALE_PR_FIXTURE))
+    assert cfg.bindings[0].stale_prs == StalePRConfig(
+        cadence="weekly", tz="Europe/Stockholm", threshold_days=21, include_drafts=True
+    )
+
+
+def test_stale_prs_defaults(tmp_path):
+    text = STALE_PR_FIXTURE.replace("      threshold_days: 21\n", "").replace(
+        "      include_drafts: true\n", ""
+    )
+    cfg = load_config(_write(tmp_path, text))
+    assert cfg.bindings[0].stale_prs.threshold_days == 14
+    assert cfg.bindings[0].stale_prs.include_drafts is False
+
+
+def test_stale_prs_absent_is_none(tmp_path):
+    cfg = load_config(_write(tmp_path, FIXTURE))
+    assert cfg.bindings[0].stale_prs is None
+
+
+def test_stale_prs_bad_threshold_raises(tmp_path):
+    text = STALE_PR_FIXTURE.replace("threshold_days: 21", "threshold_days: 0")
+    with pytest.raises(ValueError, match="threshold_days"):
+        load_config(_write(tmp_path, text))
+
+
+def test_stale_pr_bindings_requires_channel(tmp_path):
+    cfg = load_config(_write(tmp_path, STALE_PR_FIXTURE))
+    assert tuple(b.name for b in cfg.stale_pr_bindings()) == ("MyTV",)
+    text = STALE_PR_FIXTURE.replace("channel_id: C123", "channel_id: null")
+    assert load_config(_write(tmp_path, text)).stale_pr_bindings() == ()
+
+
+def test_adr_parsed_with_dir_default(tmp_path):
+    cfg = load_config(_write(tmp_path, ADR_FIXTURE))
+    assert cfg.bindings[0].adr == AdrConfig(cadence="weekly", tz="Europe/Stockholm", dir="docs/adr")
+
+
+def test_adr_custom_dir(tmp_path):
+    text = ADR_FIXTURE.replace(
+        "      tz: Europe/Stockholm\n",
+        "      tz: Europe/Stockholm\n      dir: documentation/decisions\n",
+    )
+    cfg = load_config(_write(tmp_path, text))
+    assert cfg.bindings[0].adr.dir == "documentation/decisions"
+
+
+def test_adr_absent_is_none(tmp_path):
+    cfg = load_config(_write(tmp_path, FIXTURE))
+    assert cfg.bindings[0].adr is None
+
+
+def test_adr_bad_cadence_raises(tmp_path):
+    text = ADR_FIXTURE.replace("cadence: weekly", "cadence: hourly")
+    with pytest.raises(ValueError, match="adr.cadence"):
+        load_config(_write(tmp_path, text))
+
+
+def test_adr_bindings_requires_channel(tmp_path):
+    cfg = load_config(_write(tmp_path, ADR_FIXTURE))
+    assert tuple(b.name for b in cfg.adr_bindings()) == ("MyTV",)
+    text = ADR_FIXTURE.replace("channel_id: C123", "channel_id: null")
+    assert load_config(_write(tmp_path, text)).adr_bindings() == ()

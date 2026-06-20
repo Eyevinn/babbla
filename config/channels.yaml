@@ -31,6 +31,17 @@ projects:
 #        cadence: weekly           # daily | weekly
 #        tz: Europe/Stockholm
 #        count: 3                  # number of questions (default 3)
+# You can also nudge about stale open PRs (deterministic — no model call) and post
+# a rotating "ADR of the week" teaser (read-only agent) to a PROJECT's channel:
+#      stale_prs:
+#        cadence: weekly         # daily | weekly
+#        tz: Europe/Stockholm
+#        threshold_days: 14      # idle this many days => nudge (default 14)
+#        include_drafts: false   # default false
+#      adr:
+#        cadence: weekly         # daily | weekly
+#        tz: Europe/Stockholm
+#        dir: docs/adr           # default
 # Personal Subscriptions (optional). When this block is present, subscribers
 # receive a Personal Digest by DM on the cadence each user picks via
 # `/babbla digest <daily|weekly|off>` (default below applies until they choose).
