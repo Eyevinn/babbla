@@ -11,6 +11,7 @@ from slack_sdk.web.async_client import AsyncWebClient  # noqa: F401  (type only;
 
 from babbla.agent_runner import AgentRunner, Secrets
 from babbla.config import load_config
+from babbla.doctor import check_access
 from babbla.digest.actions import (
     AdrDigestAction, PerProjectDigestAction, PersonalDigestAction, QuizAction, StalePRAction,
 )
@@ -118,6 +119,24 @@ def build_scheduler(*, config, secrets: Secrets, db_path: str, client) -> Action
     return ActionScheduler(actions=tuple(actions), now_fn=_utcnow)
 
 
+def run_preflight(config, *, get_json, env=None):
+    """Read-access preflight: WARN per unreachable repo, then continue.
+
+    Never raises — a partially unreachable GitHub must not crash Babbla; the
+    warning makes a token-scope miss visible at boot instead of as a silent
+    empty answer later. Returns the checks, or None when skipped.
+    """
+    env = os.environ if env is None else env
+    if env.get("BABBLA_SKIP_PREFLIGHT"):
+        logger.info("Read-access preflight skipped (BABBLA_SKIP_PREFLIGHT set)")
+        return None
+    checks = check_access(config, get_json=get_json)
+    for c in checks:
+        if not c.reachable:
+            logger.warning("Preflight: cannot read %s (%s): %s", c.name, c.slug, c.detail)
+    return checks
+
+
 async def main() -> None:
     logging.basicConfig(level=logging.INFO)
     from slack_bolt.async_app import AsyncApp
@@ -127,6 +146,7 @@ async def main() -> None:
     config_path = os.environ.get("BABBLA_CONFIG", "config/channels.yaml")
     db_path = os.environ.get("BABBLA_DB", "babbla.db")
     config = load_config(config_path)
+    run_preflight(config, get_json=make_get_json(secrets.github_token))
     orchestrator = build_orchestrator(config_path=config_path, db_path=db_path, secrets=secrets)
 
     app = AsyncApp(token=os.environ["SLACK_BOT_TOKEN"])
