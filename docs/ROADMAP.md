@@ -109,18 +109,23 @@ lobby channel / subscription / digest / quiz is set in `config/channels.yaml`).
   points-don't-reveal for `private` projects. (`docs/superpowers/specs/2026-06-18-visibility-enforcement-design.md`)
 - [x] **Lobby** — open discovery surface; LLM classifier routes a free-text ask to a project, answers
   public/internal, points-don't-reveal for private; sticky per-thread routing. (`…/2026-06-18-lobby-design.md`)
-- [x] **Shared Subscriptions** — a Channel follows a *set* of projects (portfolio channel); Channel
-  asks route among the subscribed set, reusing the Lobby router. (`…/2026-06-19-shared-subscriptions-design.md`)
+- ~~**Shared Subscriptions** — a Channel follows a *set* of projects (portfolio channel).~~
+  **Removed 2026-06-20** (built but never needed; the portfolio-channel routing path was only ever
+  exercised by tests). Deleted the code, the `subscriptions:` config block, the `shared_digest_state`
+  table, and the tests. The generic router it shared — `_resolve_subscription`,
+  `subscriptions.entries_for`, `DigestRunner.summarize_shared` — stays, since Personal Subscriptions
+  reuses it. Historical design: `…/2026-06-19-shared-subscriptions-design.md`.
 - [x] **Scheduled Actions framework** — generalized the digest scheduler into `ActionScheduler` +
-  `Action`; three actions: per-project digest (refactored), shared/portfolio digest fan-out, and a
-  minimal read-only weekly quiz. (`…/2026-06-19-scheduled-actions-design.md`)
+  `Action`; two actions: per-project digest (refactored) and a minimal read-only weekly quiz.
+  (The shared/portfolio digest fan-out was removed with Shared Subscriptions above.)
+  (`…/2026-06-19-scheduled-actions-design.md`)
 - [x] **Personal Subscriptions** — per-user persisted interests (Babbla's first per-user write store)
   via a `/babbla` slash command (subscribe/unsubscribe/list/digest), personal DM-ask routing among the
-  subscribed set (reusing the Shared-Subscription router; empty set falls back to the `dm:true` project),
+  subscribed set (reusing the generic subscription router; empty set falls back to the `dm:true` project),
   and a Personal Digest delivered by DM on a per-user cadence (daily/weekly/off). Public/internal only,
   enforced at subscribe-time, ask-time (`Surface.DM`), and digest-send-time. (`…/2026-06-19-personal-subscriptions-design.md`)
 - [x] **Topics** — thematic slices narrowing a digest. A `Topic` (name + description) attaches to a
-  per-project or shared digest; the summarizer covers only matching changes (LLM-scoped) and stays
+  per-project digest; the summarizer covers only matching changes (LLM-scoped) and stays
   silent when none match this period (watermark still advances). Back-compatible / inert without a
   `topic:` block. Ask-scoped topics, personal-digest topics, and deterministic label/path matching
   deferred. (`…/2026-06-19-topics-design.md`)

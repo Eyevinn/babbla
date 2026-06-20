@@ -119,13 +119,7 @@ class Orchestrator:
             if cmd is not None:
                 reply = await self._dispatch_command(user_id, cmd)
                 return CitedAnswer(text=reply, session_id=None)
-        if not is_dm:
-            sub = self._config.subscription_for(channel_id)
-            if sub is not None:
-                return await self._handle_subscription_ask(
-                    text=text, thread_ts=thread_ts, sub=sub
-                )
-        elif self._personal_store is not None and user_id is not None and self._catalog:
+        if is_dm and self._personal_store is not None and user_id is not None and self._catalog:
             names = await self._personal_store.list_for(user_id)
             entries = subscriptions.entries_for(self._catalog, names) if names else ()
             if entries:
@@ -158,27 +152,6 @@ class Orchestrator:
                     return entry
             # sticky project no longer in this subscription → re-route
         return await lobby.route(text, entries, self._classify_fn)
-
-    async def _handle_subscription_ask(self, *, text: str, thread_ts: str, sub) -> CitedAnswer:
-        entries = subscriptions.entries_for(self._catalog, sub.project_names)
-        async with self._lock_for(thread_ts):
-            try:
-                entry = await self._resolve_subscription(text, thread_ts, entries)
-                if entry is None:
-                    return CitedAnswer(
-                        text=subscriptions.subscription_clarify(entries), session_id=None
-                    )
-                decision = authorize_ask(entry.binding, Surface.CHANNEL)  # channel = access
-                if not decision.allowed:
-                    return CitedAnswer(text=decision.pointer, session_id=None)
-                await self._lobby_store.put(thread_ts, entry.binding.name)
-                resume = await self._store.get_session(thread_ts)
-                answer = await self._runner.run_ask(text, entry.binding, resume)
-                if answer.session_id:
-                    await self._store.put_session(thread_ts, answer.session_id)
-                return answer       # no pointer suffix — the asker is already home
-            finally:
-                self._release_lock(thread_ts)
 
     async def _handle_personal_ask(self, *, text: str, thread_ts: str, entries) -> CitedAnswer:
         async with self._lock_for(thread_ts):

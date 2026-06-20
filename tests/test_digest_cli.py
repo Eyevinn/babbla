@@ -4,7 +4,7 @@ from babbla.digest.scheduler import ActionScheduler
 
 class RecordingAction:
     """Matches the real Action contract: a `.project` (None for non-project-scoped
-    actions like shared/personal digests) and a `maybe_run` coroutine."""
+    actions like the personal digest) and a `maybe_run` coroutine."""
 
     def __init__(self, project=None, label="action"):
         self.project = project

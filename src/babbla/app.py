@@ -12,7 +12,7 @@ from slack_sdk.web.async_client import AsyncWebClient  # noqa: F401  (type only;
 from babbla.agent_runner import AgentRunner, Secrets
 from babbla.config import load_config
 from babbla.digest.actions import (
-    PerProjectDigestAction, PersonalDigestAction, QuizAction, SharedDigestAction,
+    PerProjectDigestAction, PersonalDigestAction, QuizAction,
 )
 from babbla.digest.anchors import make_get_json
 from babbla.digest.poster import SlackPoster
@@ -25,7 +25,7 @@ from babbla.orchestrator import Orchestrator
 from babbla.read_only import DEFAULT_MODEL
 from babbla.session_store import (
     ActionTimerStore, DigestStateStore, LobbyThreadStore, PersonalDigestStateStore,
-    PersonalSubStore, SessionStore, SharedDigestStateStore,
+    PersonalSubStore, SessionStore,
 )
 from babbla.slack_adapter import register_handlers
 
@@ -57,7 +57,7 @@ def build_orchestrator(*, config_path: str, db_path: str, secrets: Secrets, get_
     personal_store = PersonalSubStore(db_path)
     default_cadence = config.personal_digest.default_cadence if config.personal_digest else "weekly"
     intent_fn = make_intent_fn(_sdk_query, secrets.model)
-    if config.lobby_channel_id is None and not config.subscriptions and config.personal_digest is None:
+    if config.lobby_channel_id is None and config.personal_digest is None:
         return Orchestrator(
             config, runner, store,
             personal_store=personal_store, personal_default_cadence=default_cadence,
@@ -86,14 +86,11 @@ def build_scheduler(*, config, secrets: Secrets, db_path: str, client) -> Action
     digest_runner = DigestRunner(AgentRunner(secrets))
     quiz_runner = QuizRunner(AgentRunner(secrets))
     digest_store = DigestStateStore(db_path)
-    shared_store = SharedDigestStateStore(db_path)
     timer_store = ActionTimerStore(db_path)
     by_name = {b.name: b for b in config.bindings}
     actions = []
     for b in config.digest_bindings():
         actions.append(PerProjectDigestAction(b, digest_store, get_json, digest_runner, poster))
-    for s in config.digest_subscriptions():
-        actions.append(SharedDigestAction(s, by_name, shared_store, get_json, digest_runner, poster))
     for b in config.quiz_bindings():
         actions.append(QuizAction(b, timer_store, quiz_runner, poster, b.quiz.cadence, b.quiz.tz, b.quiz.count))
     if config.personal_digest is not None:

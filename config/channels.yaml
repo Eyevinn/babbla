@@ -25,27 +25,8 @@ projects:
       # topic:
       #   name: security
       #   description: "auth, secrets, access control, CVEs, dependency security bumps"
-# Shared Subscriptions: let ONE channel follow a SET of projects (a "portfolio"
-# channel). A question there is routed to the right project; today's 1:1
-# single-project channels (channel_id on a project above) keep working unchanged.
-# Omit this block entirely for the 1:1 default. Example:
-# subscriptions:
-#   - channel_id: C0PORTFOLIO   # the portfolio channel's Slack id
-#     projects: [MyTV]          # names from `projects:` above; >= 1, all must exist
-# Scheduled actions (optional). Beyond a project's own `digest:` above, you can:
-#  - give a SUBSCRIPTION an aggregated digest covering all its projects:
-#      subscriptions:
-#        - channel_id: C0PORTFOLIO
-#          projects: [MyTV]
-#          digest:
-#            cadence: weekly       # daily | weekly
-#            tz: Europe/Stockholm
-#          # Optional: narrow this digest to a thematic slice. The summarizer covers
-#          # only changes relevant to the topic and stays silent when none match.
-#          # topic:
-#          #   name: security
-#          #   description: "auth, secrets, access control, CVEs, dependency security bumps"
-#  - give a PROJECT a weekly read-only quiz posted to its channel (answers in a thread):
+# Scheduled actions (optional). Beyond a project's own `digest:` above, you can
+# give a PROJECT a weekly read-only quiz posted to its channel (answers in a thread):
 #      quiz:
 #        cadence: weekly           # daily | weekly
 #        tz: Europe/Stockholm

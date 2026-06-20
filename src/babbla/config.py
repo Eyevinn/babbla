@@ -48,30 +48,15 @@ class ProjectBinding:
 
 
 @dataclass(frozen=True)
-class SubscriptionDigest:
-    cadence: str
-    tz: str
-    topic: "Topic | None" = None
-
-
-@dataclass(frozen=True)
 class PersonalDigestConfig:
     default_cadence: str
     tz: str
 
 
 @dataclass(frozen=True)
-class Subscription:
-    channel_id: str
-    project_names: tuple[str, ...]
-    digest: SubscriptionDigest | None = None
-
-
-@dataclass(frozen=True)
 class Config:
     bindings: tuple[ProjectBinding, ...]
     lobby_channel_id: str | None = None
-    subscriptions: tuple[Subscription, ...] = ()
     personal_digest: "PersonalDigestConfig | None" = None
 
     def for_channel(self, channel_id: str) -> ProjectBinding | None:
@@ -86,24 +71,15 @@ class Config:
                 return b
         return None
 
-    def subscription_for(self, channel_id: str) -> Subscription | None:
-        for s in self.subscriptions:
-            if s.channel_id == channel_id:
-                return s
-        return None
-
     def digest_bindings(self) -> tuple[ProjectBinding, ...]:
         return tuple(b for b in self.bindings if b.digest is not None and b.channel_id)
-
-    def digest_subscriptions(self) -> tuple[Subscription, ...]:
-        return tuple(s for s in self.subscriptions if s.digest is not None)
 
     def quiz_bindings(self) -> tuple[ProjectBinding, ...]:
         return tuple(b for b in self.bindings if b.quiz is not None and b.channel_id)
 
 
 def _parse_cadence_tz(label: str, raw: dict | None, kind: str):
-    """Shared cadence+tz parse for subscription digest / quiz. Returns (cadence, tz) or None."""
+    """Shared cadence+tz parse for the quiz block. Returns (cadence, tz) or None."""
     if not raw:
         return None
     raw_cadence = raw.get("cadence", "off")
@@ -128,41 +104,6 @@ def _parse_quiz(name: str, raw: dict | None) -> QuizConfig | None:
     if not isinstance(count, int) or isinstance(count, bool) or count < 1:
         raise ValueError(f"{name}: quiz.count must be a positive integer, got {count!r}")
     return QuizConfig(cadence=ct[0], tz=ct[1], count=count)
-
-
-def _parse_subscriptions(raw_subs, known_names: set[str]) -> tuple[Subscription, ...]:
-    subscriptions: list[Subscription] = []
-    seen_channels: set[str] = set()
-    for raw_sub in raw_subs or []:
-        channel_id = raw_sub.get("channel_id")
-        if not channel_id:
-            raise ValueError("channels.yaml: each subscription requires a channel_id")
-        names = tuple(raw_sub.get("projects") or ())
-        if not names:
-            raise ValueError(
-                f"channels.yaml: subscription for {channel_id} must list at least one project"
-            )
-        for n in names:
-            if n not in known_names:
-                raise ValueError(
-                    f"channels.yaml: subscription for {channel_id} references unknown project {n!r}"
-                )
-        if channel_id in seen_channels:
-            raise ValueError(
-                f"channels.yaml: channel_id {channel_id} appears in more than one subscription"
-            )
-        seen_channels.add(channel_id)
-        raw_digest = raw_sub.get("digest")
-        ct = _parse_cadence_tz(f"subscription {channel_id}", raw_digest, "digest")
-        if ct:
-            topic = _parse_topic(f"subscription {channel_id}", (raw_digest or {}).get("topic"))
-            digest = SubscriptionDigest(cadence=ct[0], tz=ct[1], topic=topic)
-        else:
-            digest = None
-        subscriptions.append(
-            Subscription(channel_id=channel_id, project_names=names, digest=digest)
-        )
-    return tuple(subscriptions)
 
 
 def _parse_topic(label: str, raw: dict | None) -> "Topic | None":
@@ -244,18 +185,9 @@ def load_config(path: str | os.PathLike) -> Config:
     if sum(1 for b in bindings if b.dm) > 1:
         raise ValueError("channels.yaml: exactly one project may set dm: true in the pilot")
     lobby_channel_id = raw.get("lobby_channel_id")
-    subscriptions = _parse_subscriptions(raw.get("subscriptions"), {b.name for b in bindings})
-    for sub in subscriptions:
-        if lobby_channel_id is not None and sub.channel_id == lobby_channel_id:
-            logger.warning(
-                "channels.yaml: channel_id %r is both the lobby channel and a subscription; "
-                "the lobby dispatch wins, so the subscription is shadowed.",
-                sub.channel_id,
-            )
     personal_digest = _parse_personal_digest(raw.get("personal_digest"))
     return Config(
         bindings=bindings,
         lobby_channel_id=lobby_channel_id,
-        subscriptions=subscriptions,
         personal_digest=personal_digest,
     )

@@ -55,63 +55,6 @@ class PerProjectDigestAction:
         await self._store.advance(self._b.channel_id, head, now.timestamp())
 
 
-class SharedDigestAction:
-    def __init__(self, subscription, by_name, store, get_json, runner, poster) -> None:
-        self._sub = subscription
-        self._by_name = by_name
-        self._store = store
-        self._get_json = get_json
-        self._runner = runner
-        self._poster = poster
-        self.label = f"shared-digest:{subscription.channel_id}"
-
-    async def maybe_run(self, now: datetime) -> None:
-        sub = self._sub
-        d = sub.digest
-        state = await self._store.get(sub.channel_id)
-        if not is_due(now, state.last_digest_at, d.cadence, d.tz):
-            return
-        heads: dict[str, str] = {}
-        per_project_changes: dict[str, list] = {}
-        for name in sub.project_names:
-            b = self._by_name.get(name)
-            if b is None:
-                logger.warning("shared digest %s: no binding for project %r", sub.channel_id, name)
-                continue
-            anchor = b.digest.anchor if b.digest else "branch"
-            deploy_workflow = b.digest.deploy_workflow if b.digest else None
-            head = head_for(b.owner, b.repo, anchor, deploy_workflow, get_json=self._get_json)
-            if head is None:
-                continue  # no ship signal — do not advance this project
-            heads[name] = head
-            wm = state.watermarks.get(name)
-            if wm is None:
-                if anchor == "branch":
-                    cutoff = (now - _PERIOD[d.cadence]).strftime("%Y-%m-%dT%H:%M:%SZ")
-                    changes = changes_since(b.owner, b.repo, cutoff, get_json=self._get_json)
-                else:
-                    changes = []
-            elif head == wm:
-                changes = []
-            else:
-                changes = changes_between(b.owner, b.repo, wm, head, get_json=self._get_json)
-            if changes:
-                per_project_changes[name] = changes
-        if not per_project_changes:
-            return  # all quiet: no post, no advance
-        context_binding = self._by_name[next(iter(per_project_changes))]
-        slugs = {
-            n: f"{self._by_name[n].owner}/{self._by_name[n].repo}"
-            for n in per_project_changes if n in self._by_name
-        }
-        text = await self._runner.summarize_shared(
-            context_binding, per_project_changes, topic=self._sub.digest.topic, slugs=slugs
-        )
-        if text.strip():
-            await self._poster.post(sub.channel_id, text, blocks=delete_button_blocks(text))
-        await self._store.advance(sub.channel_id, heads, now.timestamp())
-
-
 class PersonalDigestAction:
     def __init__(self, personal_store, state_store, by_name, get_json, runner, poster,
                  default_cadence: str, tz: str) -> None:

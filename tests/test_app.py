@@ -81,29 +81,6 @@ def test_build_orchestrator_with_lobby_builds_catalog(tmp_path):
     assert orch._classify_fn is not None
 
 
-def test_build_orchestrator_with_subscriptions_builds_catalog(tmp_path):
-    cfg = tmp_path / "channels.yaml"
-    cfg.write_text(
-        "projects:\n  - name: MyTV\n    owner: Wkkkkk\n    repo: MyTV\n"
-        "    visibility: public\n    channel_id: C123\n    dm: true\n"
-        "subscriptions:\n  - channel_id: C900\n    projects: [MyTV]\n"
-    )
-    calls = []
-
-    def fake_get_json(path):
-        calls.append(path)
-        return {"description": "desc"}
-
-    orch = build_orchestrator(
-        config_path=str(cfg), db_path=str(tmp_path / "s.db"),
-        secrets=load_secrets(ENV), get_json=fake_get_json,
-    )
-    assert calls == ["/repos/Wkkkkk/MyTV"]            # catalog built even without a lobby
-    assert len(orch._catalog) == 1
-    assert orch._lobby_store is not None
-    assert orch._classify_fn is not None
-
-
 def test_build_orchestrator_always_has_personal_store(tmp_path):
     cfg = tmp_path / "channels.yaml"
     cfg.write_text(
@@ -152,7 +129,7 @@ def test_build_scheduler_includes_personal_digest(tmp_path):
 
 
 from babbla.digest.scheduler import ActionScheduler
-from babbla.digest.actions import PerProjectDigestAction, SharedDigestAction, QuizAction
+from babbla.digest.actions import PerProjectDigestAction, QuizAction
 from babbla.app import build_scheduler
 from babbla.config import load_config
 
@@ -165,11 +142,6 @@ def test_build_scheduler_assembles_actions(tmp_path):
         "    channel_id: C123\n    dm: true\n"
         "    digest:\n      cadence: weekly\n      tz: UTC\n      anchor: branch\n"
         "    quiz:\n      cadence: weekly\n      tz: UTC\n"
-        "  - name: Stream\n    owner: Wkkkkk\n    repo: stream\n    visibility: internal\n"
-        "    channel_id: C456\n    dm: false\n"
-        "subscriptions:\n"
-        "  - channel_id: C900\n    projects: [MyTV, Stream]\n"
-        "    digest:\n      cadence: weekly\n      tz: UTC\n"
     )
     config = load_config(cfg_path)
     sched = build_scheduler(
@@ -177,7 +149,7 @@ def test_build_scheduler_assembles_actions(tmp_path):
     )
     assert isinstance(sched, ActionScheduler)
     kinds = sorted(type(a).__name__ for a in sched._actions)
-    assert kinds == ["PerProjectDigestAction", "QuizAction", "SharedDigestAction"]
+    assert kinds == ["PerProjectDigestAction", "QuizAction"]
 
 
 def test_build_scheduler_inert_when_nothing_configured(tmp_path):
