@@ -2,8 +2,6 @@ from datetime import datetime, timezone
 
 from babbla.digest.adr import changed_adrs
 
-NOW = datetime(2026, 6, 20, 12, tzinfo=timezone.utc)
-
 
 def _contents(*names):
     return [{"name": n} for n in names]

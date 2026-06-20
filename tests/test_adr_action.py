@@ -107,7 +107,8 @@ async def test_none_contents_quiet_but_advances():
     runner = FakeAdrRunner()
     action, timer, poster = _action(None, lambda p: None, runner)
     await action.maybe_run(NOW)
-    assert poster.posts == [] and timer.advanced == [("adr:MyTV", NOW.timestamp())]
+    assert runner.calls == [] and poster.posts == []
+    assert timer.advanced == [("adr:MyTV", NOW.timestamp())]
 
 
 async def test_digest_failure_does_not_advance():
