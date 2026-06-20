@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import yaml
@@ -68,6 +69,7 @@ class ProjectBinding:
     quiz: QuizConfig | None = None
     stale_prs: "StalePRConfig | None" = None
     adr: "AdrConfig | None" = None
+    skills: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -164,6 +166,14 @@ def _parse_str_list(label: str, field: str, raw: object) -> tuple[str, ...]:
     return tuple(str(x) for x in raw)
 
 
+def _parse_skills(name: str, raw: object, pool: Path) -> tuple[str, ...]:
+    skills = _parse_str_list(name, "skills", raw)
+    for s in skills:
+        if not (pool / s / "SKILL.md").is_file():
+            raise ValueError(f"{name}: unknown skill {s!r} (no {pool}/{s}/SKILL.md)")
+    return skills
+
+
 def _parse_topic(label: str, raw: dict | None) -> "Topic | None":
     if not raw:
         return None
@@ -222,6 +232,7 @@ def _parse_personal_digest(raw: dict | None) -> "PersonalDigestConfig | None":
 def load_config(path: str | os.PathLike) -> Config:
     with open(path, "r", encoding="utf-8") as fh:
         raw = yaml.safe_load(fh) or {}
+    pool = Path(path).parent / "skills"
     bindings = tuple(
         ProjectBinding(
             name=p["name"],
@@ -234,6 +245,7 @@ def load_config(path: str | os.PathLike) -> Config:
             quiz=_parse_quiz(p["name"], p.get("quiz")),
             stale_prs=_parse_stale_prs(p["name"], p.get("stale_prs")),
             adr=_parse_adr(p["name"], p.get("adr")),
+            skills=_parse_skills(p["name"], p.get("skills"), pool),
         )
         for p in raw.get("projects", [])
     )
