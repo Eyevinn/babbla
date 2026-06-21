@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from claude_agent_sdk import ClaudeAgentOptions
+
 from babbla.read_only import DEFAULT_MODEL
 
 
@@ -32,3 +34,19 @@ def tuning_kwargs(p: RuntimeProfile) -> dict:
     if p.max_budget_usd is not None:
         out["max_budget_usd"] = p.max_budget_usd
     return out
+
+
+def classifier_options(p: RuntimeProfile, system_prompt: str) -> ClaudeAgentOptions:
+    """The shared tools-less classifier options for lobby routing and personal
+    intent. setting_sources=[] isolates the classifier from host/project context
+    (without it it loads CLAUDE.md and emits prose instead of a bare name — the
+    2026-06-20 routing fix); mcp_servers={} + allowed_tools=[] keep it a pure
+    label-emitter."""
+    return ClaudeAgentOptions(
+        model=p.model,
+        system_prompt=system_prompt,
+        allowed_tools=[],
+        mcp_servers={},
+        setting_sources=[],
+        **tuning_kwargs(p),
+    )
