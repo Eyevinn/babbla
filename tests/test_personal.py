@@ -201,3 +201,28 @@ async def test_classify_intent_maps_topic_add():
         return "topic add MyTV | security | auth, secrets, CVEs"
     cmd = await classify_intent("only show me security in MyTV", ["MyTV"], fake_intent_fn)
     assert cmd.verb == "topic-add" and cmd.name == "security"
+
+
+async def test_make_intent_fn_isolated_and_tuned():
+    from babbla.personal import make_intent_fn
+    from babbla.runtime import RuntimeProfile
+
+    captured = {}
+
+    class _Msg:
+        def __init__(self, result):
+            self.result = result
+            self.session_id = None
+
+    async def fake_query(*, prompt, options):
+        captured["options"] = options
+        yield _Msg("NONE")
+
+    intent = make_intent_fn(fake_query, RuntimeProfile(model="claude-c", effort="low"))
+    await intent("hi", ["MyTV"])
+    opts = captured["options"]
+    assert opts.allowed_tools == []
+    assert opts.mcp_servers == {}        # now isolated (was not before)
+    assert opts.setting_sources == []    # now isolated (was not before)
+    assert opts.model == "claude-c"
+    assert opts.effort == "low"

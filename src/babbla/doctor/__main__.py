@@ -6,6 +6,7 @@ import sys
 
 from babbla.config import load_config
 from babbla.doctor import check_access, check_skills
+from babbla.runtime import load_profiles
 
 
 def main(argv: list[str] | None = None, get_json=None) -> int:
@@ -28,6 +29,23 @@ def main(argv: list[str] | None = None, get_json=None) -> int:
         # Lazy import: only build the network reader when actually needed.
         from babbla.digest.anchors import make_get_json
         get_json = make_get_json(token)
+
+    try:
+        ask, classifier = load_profiles(os.environ)
+    except RuntimeError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+
+    def _tier(p):
+        return (
+            f"model={p.model} effort={p.effort or '(default)'} "
+            f"fallback={p.fallback_model or '(none)'} "
+            f"max_turns={p.max_turns or '(default)'} "
+            f"max_budget_usd={p.max_budget_usd or '(default)'}"
+        )
+
+    print(f"[ok] Ask tier: {_tier(ask)}")
+    print(f"[ok] Classifier tier: {_tier(classifier)}")
 
     config_path = os.environ.get("BABBLA_CONFIG", "config/channels.yaml")
     config = load_config(config_path)

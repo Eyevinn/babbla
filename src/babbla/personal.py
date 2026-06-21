@@ -3,9 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Sequence
 
-from claude_agent_sdk import ClaudeAgentOptions
-
 from babbla.agent_runner import _extract_text
+from babbla.runtime import RuntimeProfile, classifier_options
 
 _CADENCES = {"daily", "weekly", "off"}
 # Verbs that count as a subscription-management intent. Anything else the
@@ -83,7 +82,7 @@ def _command_line(reply: str) -> str | None:
     return None
 
 
-def make_intent_fn(query_fn, model: str):
+def make_intent_fn(query_fn, profile: RuntimeProfile):
     """Default intent classifier: a tools-less SDK query emitting one command line or NONE."""
 
     async def intent_fn(text: str, project_names: Sequence[str]) -> str:
@@ -128,9 +127,7 @@ def make_intent_fn(query_fn, model: str):
             "command. A question ABOUT a project's code/history/design, a greeting, or an unclear "
             "message is NONE. When genuinely unsure, output NONE.\n\nProjects:\n" + listing
         )
-        options = ClaudeAgentOptions(
-            model=model, system_prompt=system_prompt, allowed_tools=[]
-        )
+        options = classifier_options(profile, system_prompt)
         reply = ""
         async for message in query_fn(prompt=text, options=options):
             captured = _extract_text(message)

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from babbla.agent_runner import AgentRunner, Artifact, CitedAnswer, Secrets
 from babbla.config import ProjectBinding
+from babbla.runtime import RuntimeProfile
 
 BINDING = ProjectBinding("MyTV", "Wkkkkk", "MyTV", "public", "C123", True)
 SECRETS = Secrets(github_token="ghp_x")
@@ -236,3 +237,32 @@ async def test_e2e_plain_path_denies_bash():
     )
     # Bash is denied -> the command never runs -> its output never appears.
     assert E2E_SENTINEL not in ans.text
+
+
+# --- ask-profile tuning knobs applied to _base_options --------------------------
+
+def test_base_options_applies_ask_profile_tuning():
+    from babbla.read_only import build_agent_config
+    secrets = Secrets(
+        github_token="g",
+        ask=RuntimeProfile(model="claude-opus-4-8", effort="high", max_turns=5),
+    )
+    runner = AgentRunner(secrets)
+    cfg = build_agent_config(
+        owner="o", repo="r", github_token="g", model=secrets.ask.model,
+    )
+    opts = runner._base_options(cfg, None, None)
+    assert opts.effort == "high"
+    assert opts.max_turns == 5
+    assert opts.model == "claude-opus-4-8"
+
+
+def test_base_options_inert_for_default_profile():
+    from babbla.read_only import build_agent_config
+    runner = AgentRunner(Secrets(github_token="g"))  # default profiles
+    cfg = build_agent_config(owner="o", repo="r", github_token="g")
+    opts = runner._base_options(cfg, None, None)
+    assert opts.effort is None
+    assert opts.max_turns is None
+    assert opts.max_budget_usd is None
+    assert opts.fallback_model is None

@@ -89,3 +89,23 @@ def test_skill_missing_from_runtime_pool_exits_one(tmp_path, monkeypatch, capsys
     assert code == 1
     assert "architecture-diagram" in out
     assert "MISSING" in out
+
+
+def test_doctor_prints_resolved_tiers(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "g")
+    monkeypatch.setenv("BABBLA_CLASSIFIER_MODEL", "claude-haiku-4-5")
+    monkeypatch.setenv("BABBLA_ASK_EFFORT", "high")
+    monkeypatch.setenv("BABBLA_CONFIG", _write_cfg(tmp_path))
+    code = main([], get_json=lambda path: {"full_name": path})
+    out = capsys.readouterr().out
+    assert "Ask tier" in out and "claude-opus-4-8" in out and "effort=high" in out
+    assert "Classifier tier" in out and "claude-haiku-4-5" in out
+
+
+def test_doctor_rejects_bad_effort(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "g")
+    monkeypatch.setenv("BABBLA_ASK_EFFORT", "turbo")
+    monkeypatch.setenv("BABBLA_CONFIG", _write_cfg(tmp_path))
+    code = main([], get_json=lambda path: {"full_name": path})
+    assert code == 2
+    assert "EFFORT" in capsys.readouterr().err

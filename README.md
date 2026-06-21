@@ -111,6 +111,30 @@ Required environment variables (see [`.env.example`](.env.example)):
 | `GITHUB_TOKEN` | Fine-grained PAT, **read-only**, scoped to the target repo |
 | `ANTHROPIC_API_KEY` | *Optional* — omit to use a Claude Code CLI subscription login |
 
+### Model and effort tuning
+
+Babbla has two tiers: the **Ask tier** (interactive Asks, scheduled digests, quiz, and ADR runs)
+and the **Classifier tier** (lobby routing and personal-intent — pure label-emitters). Set
+`BABBLA_MODEL` to change the shared default for both tiers; existing deployments that don't set
+it are unchanged. Each tier can then be tuned independently with four optional knobs:
+
+```
+BABBLA_ASK_MODEL=...            # overrides BABBLA_MODEL for the Ask tier
+BABBLA_ASK_EFFORT=high          # low|medium|high|xhigh|max
+BABBLA_ASK_FALLBACK_MODEL=...
+BABBLA_ASK_MAX_TURNS=8
+BABBLA_ASK_MAX_BUDGET_USD=2.0
+
+BABBLA_CLASSIFIER_MODEL=...     # overrides BABBLA_MODEL for the Classifier tier
+BABBLA_CLASSIFIER_EFFORT=low
+BABBLA_CLASSIFIER_FALLBACK_MODEL=
+BABBLA_CLASSIFIER_MAX_TURNS=1
+BABBLA_CLASSIFIER_MAX_BUDGET_USD=
+```
+
+All settings are optional and inert until set. See [`.env.example`](.env.example) for the full
+commented block. Run `babbla-doctor` (or `python -m babbla.doctor`) to see the resolved tiers.
+
 ### Slack app
 
 Create an app at <https://api.slack.com/apps>, enable **Socket Mode**, then add:

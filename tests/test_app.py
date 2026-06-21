@@ -322,3 +322,28 @@ def test_load_secrets_skills_pool_override():
     env = {"SLACK_BOT_TOKEN": "x", "SLACK_APP_TOKEN": "y", "GITHUB_TOKEN": "z",
            "BABBLA_SKILLS_POOL": "/srv/pool"}
     assert load_secrets(env).skills_pool == "/srv/pool"
+
+
+def test_load_secrets_resolves_per_surface_profiles():
+    from babbla.app import load_secrets
+    env = {
+        "SLACK_BOT_TOKEN": "x", "SLACK_APP_TOKEN": "y", "GITHUB_TOKEN": "g",
+        "BABBLA_ASK_EFFORT": "high",
+        "BABBLA_CLASSIFIER_MODEL": "claude-haiku-4-5",
+    }
+    s = load_secrets(env)
+    assert s.ask.effort == "high"
+    assert s.ask.model == "claude-opus-4-8"          # BABBLA_MODEL default
+    assert s.classifier.model == "claude-haiku-4-5"
+
+
+def test_load_secrets_backcompat_babbla_model():
+    from babbla.app import load_secrets
+    env = {
+        "SLACK_BOT_TOKEN": "x", "SLACK_APP_TOKEN": "y", "GITHUB_TOKEN": "g",
+        "BABBLA_MODEL": "claude-sonnet-4-6",
+    }
+    s = load_secrets(env)
+    assert s.ask.model == "claude-sonnet-4-6"
+    assert s.classifier.model == "claude-sonnet-4-6"
+    assert s.ask.effort is None                      # inert by default

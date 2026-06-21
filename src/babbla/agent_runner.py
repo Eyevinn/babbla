@@ -4,18 +4,18 @@ import hashlib
 import os
 import shutil
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from claude_agent_sdk import ClaudeAgentOptions, query as _sdk_query
 
 from babbla.config import ProjectBinding
 from babbla.read_only import (
-    DEFAULT_MODEL,
     build_agent_config,
     readonly_hook_kwargs,
     skill_loading_kwargs,
 )
+from babbla.runtime import RuntimeProfile, tuning_kwargs
 
 
 @dataclass(frozen=True)
@@ -34,7 +34,8 @@ class CitedAnswer:
 @dataclass(frozen=True)
 class Secrets:
     github_token: str
-    model: str = DEFAULT_MODEL
+    ask: RuntimeProfile = field(default_factory=RuntimeProfile)
+    classifier: RuntimeProfile = field(default_factory=RuntimeProfile)
     github_launcher: str = "docker"
     skills_pool: str = "config/skills"
 
@@ -96,7 +97,7 @@ class AgentRunner:
             owner=binding.owner,
             repo=binding.repo,
             github_token=self._secrets.github_token,
-            model=self._secrets.model,
+            model=self._secrets.ask.model,
             github_launcher=self._secrets.github_launcher,
             skills=binding.skills,
         )
@@ -129,6 +130,7 @@ class AgentRunner:
             mcp_servers=cfg.mcp_servers,
             setting_sources=[],
             strict_mcp_config=True,
+            **tuning_kwargs(self._secrets.ask),
         )
         params.update(extra)  # path-specific overrides (skilled: setting_sources, cwd, skills, hooks)
         options = ClaudeAgentOptions(**params)
