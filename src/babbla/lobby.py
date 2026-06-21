@@ -3,9 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Sequence
 
-from claude_agent_sdk import ClaudeAgentOptions
-
 from babbla.agent_runner import _extract_text
+from babbla.runtime import RuntimeProfile, classifier_options
 from babbla.config import ProjectBinding
 
 # Mirror access._OPEN_TIERS: which tiers the open discovery list may advertise.
@@ -65,7 +64,7 @@ async def route(
     return None  # "NONE", prose, or any unrecognised reply
 
 
-def make_classify_fn(query_fn, model: str):
+def make_classify_fn(query_fn, profile: RuntimeProfile):
     """Default classifier: a tools-less SDK query that returns exactly a name or NONE."""
 
     async def classify_fn(text: str, catalog: Sequence[CatalogEntry]) -> str:
@@ -77,17 +76,7 @@ def make_classify_fn(query_fn, model: str):
             "best-matching project from the list, or the word NONE if none clearly fits. "
             "Reply with ONLY the name or NONE — no other text.\n\nProjects:\n" + listing
         )
-        # A pure label-emitter: no tools, no MCP servers, and no filesystem
-        # settings (CLAUDE.md / project settings). Without
-        # setting_sources=[] the SDK loads project context and the classifier
-        # starts answering like a full assistant — emitting prose, not a name.
-        options = ClaudeAgentOptions(
-            model=model,
-            system_prompt=system_prompt,
-            allowed_tools=[],
-            mcp_servers={},
-            setting_sources=[],
-        )
+        options = classifier_options(profile, system_prompt)
         reply = ""
         async for message in query_fn(prompt=text, options=options):
             captured = _extract_text(message)

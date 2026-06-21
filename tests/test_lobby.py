@@ -147,7 +147,8 @@ async def test_make_classify_fn_returns_model_text():
         yield _Msg("MyTV")
 
     cat = build_catalog([_b("MyTV")], lambda p: {"description": "d"})
-    classify = make_classify_fn(fake_query, "claude-x")
+    from babbla.runtime import RuntimeProfile
+    classify = make_classify_fn(fake_query, RuntimeProfile(model="claude-x", effort="low"))
     assert (await classify("question", cat)).strip() == "MyTV"
 
 
@@ -166,9 +167,12 @@ async def test_classify_fn_isolated_from_project_context():
         yield _Msg("MyTV")
 
     cat = build_catalog([_b("MyTV")], lambda p: {"description": "d"})
-    classify = make_classify_fn(fake_query, "claude-x")
+    from babbla.runtime import RuntimeProfile
+    classify = make_classify_fn(fake_query, RuntimeProfile(model="claude-x", effort="low"))
     await classify("question", cat)
     opts = captured["options"]
     assert opts.setting_sources == []   # no CLAUDE.md / filesystem settings loaded
     assert not opts.mcp_servers         # no MCP servers
     assert opts.allowed_tools == []     # already tools-less; assert it stays so
+    assert opts.model == "claude-x"
+    assert opts.effort == "low"   # classifier-tier tuning is applied

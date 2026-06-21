@@ -59,7 +59,7 @@ def build_orchestrator(*, config_path: str, db_path: str, secrets: Secrets, get_
     store = SessionStore(db_path)
     personal_store = PersonalSubStore(db_path)
     default_cadence = config.personal_digest.default_cadence if config.personal_digest else "weekly"
-    intent_fn = make_intent_fn(_sdk_query, secrets.classifier.model)
+    intent_fn = make_intent_fn(_sdk_query, secrets.classifier)
     if config.lobby_channel_id is None and config.personal_digest is None:
         return Orchestrator(
             config, runner, store,
@@ -71,7 +71,7 @@ def build_orchestrator(*, config_path: str, db_path: str, secrets: Secrets, get_
     return Orchestrator(
         config, runner, store,
         catalog=catalog,
-        classify_fn=make_classify_fn(_sdk_query, secrets.classifier.model),
+        classify_fn=make_classify_fn(_sdk_query, secrets.classifier),
         lobby_store=LobbyThreadStore(db_path),
         personal_store=personal_store,
         personal_default_cadence=default_cadence,
