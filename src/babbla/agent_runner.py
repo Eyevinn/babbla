@@ -11,7 +11,6 @@ from claude_agent_sdk import ClaudeAgentOptions, query as _sdk_query
 
 from babbla.config import ProjectBinding
 from babbla.read_only import (
-    DEFAULT_MODEL,
     build_agent_config,
     readonly_hook_kwargs,
     skill_loading_kwargs,
@@ -131,6 +130,7 @@ class AgentRunner:
             mcp_servers=cfg.mcp_servers,
             setting_sources=[],
             strict_mcp_config=True,
+            **tuning_kwargs(self._secrets.ask),
         )
         params.update(extra)  # path-specific overrides (skilled: setting_sources, cwd, skills, hooks)
         options = ClaudeAgentOptions(**params)
