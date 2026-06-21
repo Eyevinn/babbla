@@ -24,7 +24,7 @@ from babbla.digest.scheduler import ActionScheduler
 from babbla.lobby import build_catalog, make_classify_fn
 from babbla.personal import make_intent_fn
 from babbla.orchestrator import Orchestrator
-from babbla.read_only import DEFAULT_MODEL
+from babbla.runtime import load_profiles
 from babbla.session_store import (
     ActionTimerStore, DigestStateStore, LobbyThreadStore,
     PersonalDigestStateStore, PersonalSubStore, SessionStore,
@@ -43,9 +43,11 @@ def load_secrets(env: Mapping[str, str]) -> Secrets:
     missing = [k for k in _REQUIRED if not env.get(k)]
     if missing:
         raise RuntimeError(f"Missing required env vars: {', '.join(missing)}")
+    ask, classifier = load_profiles(env)
     return Secrets(
         github_token=env["GITHUB_TOKEN"],
-        model=env.get("BABBLA_MODEL", DEFAULT_MODEL),
+        ask=ask,
+        classifier=classifier,
         github_launcher=env.get("BABBLA_GITHUB_MCP", "docker"),
         skills_pool=env.get("BABBLA_SKILLS_POOL", "config/skills"),
     )
@@ -57,7 +59,7 @@ def build_orchestrator(*, config_path: str, db_path: str, secrets: Secrets, get_
     store = SessionStore(db_path)
     personal_store = PersonalSubStore(db_path)
     default_cadence = config.personal_digest.default_cadence if config.personal_digest else "weekly"
-    intent_fn = make_intent_fn(_sdk_query, secrets.model)
+    intent_fn = make_intent_fn(_sdk_query, secrets.classifier.model)
     if config.lobby_channel_id is None and config.personal_digest is None:
         return Orchestrator(
             config, runner, store,
@@ -69,7 +71,7 @@ def build_orchestrator(*, config_path: str, db_path: str, secrets: Secrets, get_
     return Orchestrator(
         config, runner, store,
         catalog=catalog,
-        classify_fn=make_classify_fn(_sdk_query, secrets.model),
+        classify_fn=make_classify_fn(_sdk_query, secrets.classifier.model),
         lobby_store=LobbyThreadStore(db_path),
         personal_store=personal_store,
         personal_default_cadence=default_cadence,
