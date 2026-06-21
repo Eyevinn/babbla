@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Mapping
 
 from claude_agent_sdk import ClaudeAgentOptions
 
@@ -49,4 +50,65 @@ def classifier_options(p: RuntimeProfile, system_prompt: str) -> ClaudeAgentOpti
         mcp_servers={},
         setting_sources=[],
         **tuning_kwargs(p),
+    )
+
+
+_EFFORTS = ("low", "medium", "high", "xhigh", "max")
+
+
+def _effort(env: Mapping[str, str], key: str) -> str | None:
+    v = env.get(key)
+    if not v:
+        return None
+    if v not in _EFFORTS:
+        raise RuntimeError(f"{key}={v!r} must be one of {', '.join(_EFFORTS)}")
+    return v
+
+
+def _pos_int(env: Mapping[str, str], key: str) -> int | None:
+    v = env.get(key)
+    if not v:
+        return None
+    try:
+        n = int(v)
+    except ValueError:
+        n = 0
+    if n <= 0:
+        raise RuntimeError(f"{key}={v!r} must be a positive integer")
+    return n
+
+
+def _pos_float(env: Mapping[str, str], key: str) -> float | None:
+    v = env.get(key)
+    if not v:
+        return None
+    try:
+        x = float(v)
+    except ValueError:
+        x = 0.0
+    if x <= 0:
+        raise RuntimeError(f"{key}={v!r} must be a positive number")
+    return x
+
+
+def _profile(env: Mapping[str, str], prefix: str, *, default_model: str) -> RuntimeProfile:
+    p = f"BABBLA_{prefix}_"
+    return RuntimeProfile(
+        model=env.get(p + "MODEL") or default_model,
+        effort=_effort(env, p + "EFFORT"),
+        fallback_model=env.get(p + "FALLBACK_MODEL") or None,
+        max_turns=_pos_int(env, p + "MAX_TURNS"),
+        max_budget_usd=_pos_float(env, p + "MAX_BUDGET_USD"),
+    )
+
+
+def load_profiles(env: Mapping[str, str]) -> tuple[RuntimeProfile, RuntimeProfile]:
+    """Resolve (ask, classifier) profiles from env. BABBLA_MODEL is the shared
+    default for both surfaces' model; the four tuning knobs are per-surface and
+    default to None (the SDK runtime default). Raises RuntimeError on a bad
+    value so misconfiguration fails at boot, not at the first ask."""
+    base_model = env.get("BABBLA_MODEL") or DEFAULT_MODEL
+    return (
+        _profile(env, "ASK", default_model=base_model),
+        _profile(env, "CLASSIFIER", default_model=base_model),
     )
