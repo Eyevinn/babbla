@@ -72,7 +72,7 @@ def _pos_int(env: Mapping[str, str], key: str) -> int | None:
     try:
         n = int(v)
     except ValueError:
-        n = 0
+        raise RuntimeError(f"{key}={v!r} must be a positive integer") from None
     if n <= 0:
         raise RuntimeError(f"{key}={v!r} must be a positive integer")
     return n
@@ -85,7 +85,7 @@ def _pos_float(env: Mapping[str, str], key: str) -> float | None:
     try:
         x = float(v)
     except ValueError:
-        x = 0.0
+        raise RuntimeError(f"{key}={v!r} must be a positive number") from None
     if x <= 0:
         raise RuntimeError(f"{key}={v!r} must be a positive number")
     return x

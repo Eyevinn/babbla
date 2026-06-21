@@ -1,4 +1,6 @@
-from babbla.runtime import RuntimeProfile, tuning_kwargs, classifier_options
+import pytest
+
+from babbla.runtime import RuntimeProfile, tuning_kwargs, classifier_options, load_profiles
 
 
 def test_tuning_kwargs_empty_for_default_profile():
@@ -43,11 +45,6 @@ def test_classifier_options_applies_profile_tuning():
     assert opts.model == "claude-haiku-4-5"
     assert opts.effort == "low"
     assert opts.max_turns == 1
-
-
-import pytest
-
-from babbla.runtime import load_profiles
 
 
 def test_load_profiles_defaults_to_opus_when_nothing_set():
@@ -97,3 +94,8 @@ def test_load_profiles_rejects_non_int_turns():
 def test_load_profiles_rejects_non_positive_budget():
     with pytest.raises(RuntimeError, match="MAX_BUDGET_USD"):
         load_profiles({"BABBLA_CLASSIFIER_MAX_BUDGET_USD": "0"})
+
+
+def test_load_profiles_rejects_zero_turns():
+    with pytest.raises(RuntimeError, match="MAX_TURNS"):
+        load_profiles({"BABBLA_ASK_MAX_TURNS": "0"})
