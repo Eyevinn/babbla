@@ -1,5 +1,9 @@
 # Configurable model + effort (per-surface) Implementation Plan
 
+> **STATUS: ✅ COMPLETE** — all 8 tasks shipped and merged to `main` (`6edf7bc`,
+> commits `b48c263`…`c5ec1eb`). Suite green (437 passed / 1 skipped). The unticked
+> step checkboxes below are historical; the work is done.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Expose the Claude Agent SDK tuning knobs (`effort`, `fallback_model`, `max_turns`, `max_budget_usd`) split across two surfaces — an Ask tier and a cheaper classifier tier — and centralize the options build so the three call-sites stop drifting.

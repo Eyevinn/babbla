@@ -201,7 +201,10 @@ call itself.
   full-feature skilled path — stage it (Q&A first, skilled path once a runtime supports the hook
   surface). Read-only-ness itself survives the swap: it's enforced server-side
   (`GITHUB_READ_ONLY=1`), not by the runtime.
-- [ ] **Configurable model + effort.** Model is already one global env var (`BABBLA_MODEL`,
+- [x] **Configurable model + effort.** _(Done: `src/babbla/runtime.py` — per-surface Ask +
+  classifier `RuntimeProfile`s, `effort`/`fallback_model`/`max_turns`/`max_budget_usd` knobs,
+  boot-time validation, `babbla-doctor` tier echo; additive/inert until set. See
+  `docs/superpowers/plans/2026-06-21-model-effort-config.md`, merged `6edf7bc`.)_ Model is already one global env var (`BABBLA_MODEL`,
   default `claude-opus-4-8`); **effort/thinking is not configurable** — Babbla sets none of the
   SDK's `effort` / `thinking` / `max_thinking_tokens` knobs, so it runs at the runtime's default.
   Expose effort (and consider `fallback_model`, `max_turns`, and a budget cap) through env/config,
