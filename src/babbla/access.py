@@ -49,3 +49,20 @@ def authorize_ask(binding: ProjectBinding, surface: Surface) -> AccessDecision:
         reason=f"{binding.name} is private; {surface.value} is a non-channel surface",
         pointer=_pointer(binding),
     )
+
+
+def authorize_personal(binding: ProjectBinding, *, is_member: bool) -> AccessDecision:
+    """Authorize a project on a *personal* surface (DM answer / personal digest /
+    subscribe / topic). Open-tier is always allowed. A private project is allowed
+    only when the caller has confirmed live channel membership AND the binding has
+    a channel to belong to. Otherwise deny with the 0007 channel pointer.
+    """
+    if is_open_tier(binding):
+        return AccessDecision(allowed=True)
+    if is_member and binding.channel_id:
+        return AccessDecision(allowed=True)
+    return AccessDecision(
+        allowed=False,
+        reason=f"{binding.name} is private; user is not a channel member",
+        pointer=_pointer(binding),
+    )

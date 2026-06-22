@@ -1,6 +1,6 @@
 import pytest
 
-from babbla.access import Surface, authorize_ask, is_open_tier
+from babbla.access import Surface, authorize_ask, authorize_personal, is_open_tier
 from babbla.config import ProjectBinding
 
 
@@ -70,3 +70,27 @@ def test_lobby_denies_private_and_points():
     d = authorize_ask(_binding("private", "C123"), Surface.LOBBY)
     assert d.allowed is False
     assert "<#C123>" in d.pointer
+
+
+def test_authorize_personal_open_tier_allows_ignoring_membership():
+    d = authorize_personal(_b("public"), is_member=False)
+    assert d.allowed is True
+    assert d.pointer is None
+
+
+def test_authorize_personal_private_member_allows():
+    d = authorize_personal(_binding("private", "C123"), is_member=True)
+    assert d.allowed is True
+
+
+def test_authorize_personal_private_non_member_denies_with_pointer():
+    d = authorize_personal(_binding("private", "C123"), is_member=False)
+    assert d.allowed is False
+    assert d.reason is not None
+    assert "<#C123>" in d.pointer
+
+
+def test_authorize_personal_private_no_channel_denies_even_if_member():
+    d = authorize_personal(_binding("private", None), is_member=True)
+    assert d.allowed is False
+    assert d.pointer is not None
