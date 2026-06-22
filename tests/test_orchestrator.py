@@ -566,3 +566,45 @@ async def test_topic_add_private_denied_for_non_member(store, psub):
     reply = await orch.handle_command("U1", "topic add Secret | security | auth, secrets")
     assert "<#C2>" in reply                      # pointer, not "doesn't exist"
     assert await psub.topics_for("U1") == {}     # nothing was written
+
+
+# ---------------------------------------------------------------------------
+# Multi-follow / unfollow dispatch
+# ---------------------------------------------------------------------------
+
+
+async def test_dispatch_subscribe_many_partitions_valid_unknown_private(store, psub):
+    # default (deny) oracle: "Secret" is private and the user is not a member
+    orch = Orchestrator(_config_two(), FakeRunner(), store, personal_store=psub)
+    reply = await orch.handle_command("U1", "subscribe MyTV, Secret, Ghost")
+    assert await psub.list_for("U1") == ("MyTV",)          # only the valid open-tier one added
+    assert "MyTV" in reply
+    assert "Secret" in reply and "private" in reply
+    assert "Ghost" in reply and "don't know" in reply.lower()
+
+
+async def test_dispatch_subscribe_many_dedupes_already_followed(store, psub):
+    orch = Orchestrator(_config_two(), FakeRunner(), store, personal_store=psub)
+    await psub.add("U1", "MyTV")
+    await orch.handle_command("U1", "subscribe MyTV, MyTV")
+    assert await psub.list_for("U1") == ("MyTV",)          # no duplicate row
+
+
+async def test_dispatch_subscribe_many_private_allowed_for_member(store, psub):
+    orch = Orchestrator(_config_two(), FakeRunner(), store, personal_store=psub,
+                        membership=_member_oracle(True))
+    reply = await orch.handle_command("U1", "subscribe MyTV, Secret")
+    assert set(await psub.list_for("U1")) == {"MyTV", "Secret"}
+    assert "MyTV" in reply and "Secret" in reply
+
+
+async def test_dispatch_unsubscribe_many(store, psub):
+    # MyTV: followed -> removed. Secret: exists in config but not followed ->
+    # "not following". Ghost: no binding -> "unknown".
+    orch = Orchestrator(_config_two(), FakeRunner(), store, personal_store=psub)
+    await psub.add("U1", "MyTV")
+    reply = await orch.handle_command("U1", "unsubscribe MyTV, Secret, Ghost")
+    assert await psub.list_for("U1") == ()                 # MyTV removed
+    assert "MyTV" in reply
+    assert "Ghost" in reply and "don't know" in reply.lower()
+    assert "Secret" in reply and "not following" in reply.lower()

@@ -98,7 +98,10 @@ class Orchestrator:
             await self._personal_store.add_topic(user_id, binding.name, cmd.name, description)
             return personal.render_topic_added(binding.name, cmd.name, description)
         if cmd.verb == "subscribe":
-            binding = next((b for b in self._config.bindings if b.name == cmd.arg), None)
+            if len(cmd.projects) > 1:
+                return await self._subscribe_many(user_id, cmd.projects)
+            name = cmd.projects[0] if cmd.projects else cmd.arg
+            binding = next((b for b in self._config.bindings if b.name == name), None)
             if binding is None:
                 # Advertise only open-tier projects — never name a private one.
                 return personal.render_unknown_project(
@@ -110,8 +113,48 @@ class Orchestrator:
             await self._personal_store.add(user_id, binding.name)
             return personal.render_subscribed(binding.name)
         # unsubscribe
-        await self._personal_store.remove(user_id, cmd.arg)
-        return personal.render_unsubscribed(cmd.arg)
+        if len(cmd.projects) > 1:
+            return await self._unsubscribe_many(user_id, cmd.projects)
+        name = cmd.projects[0] if cmd.projects else cmd.arg
+        await self._personal_store.remove(user_id, name)
+        return personal.render_unsubscribed(name)
+
+    async def _subscribe_many(self, user_id: str, names) -> str:
+        followed = set(await self._personal_store.list_for(user_id))
+        subscribed: list[str] = []
+        skipped: list[tuple[str, str]] = []
+        for name in names:
+            binding = next((b for b in self._config.bindings if b.name == name), None)
+            if binding is None:
+                skipped.append((name, "unknown"))
+                continue
+            decision = await self._authorize_personal(user_id, binding)
+            if not decision.allowed:
+                skipped.append((binding.name, "private"))
+                continue
+            if binding.name in followed:
+                continue                       # already followed — dedupe silently
+            await self._personal_store.add(user_id, binding.name)
+            followed.add(binding.name)
+            subscribed.append(binding.name)
+        return personal.render_subscribed_many(subscribed, skipped)
+
+    async def _unsubscribe_many(self, user_id: str, names) -> str:
+        followed = set(await self._personal_store.list_for(user_id))
+        removed: list[str] = []
+        skipped: list[tuple[str, str]] = []
+        for name in names:
+            binding = next((b for b in self._config.bindings if b.name == name), None)
+            if binding is None:
+                skipped.append((name, "unknown"))
+                continue
+            if binding.name not in followed:
+                skipped.append((binding.name, "not following"))
+                continue
+            await self._personal_store.remove(user_id, binding.name)
+            followed.discard(binding.name)
+            removed.append(binding.name)
+        return personal.render_unsubscribed_many(removed, skipped)
 
     async def handle_ask(
         self, *, text: str, thread_ts: str, channel_id: str, is_dm: bool,
