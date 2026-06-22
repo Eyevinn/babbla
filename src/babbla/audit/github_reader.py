@@ -136,7 +136,13 @@ def make_reader(token: str, *, api_base: str = GITHUB_API) -> GithubReader:
             with urllib.request.urlopen(req, timeout=20) as resp:
                 return json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
-            if exc.code == 404:
+            # 404 = signal absent; 403 = this token lacks the fine-grained
+            # permission for an optional probe (/environments, /pages need the
+            # separate Environments/Pages scopes the onboarding grant omits).
+            # Both degrade to "absent" so one optional probe can't abort the
+            # audit (graceful degradation). A truly unreadable repo still 404s
+            # on the base /repos/{owner}/{repo} fetch and is caught there.
+            if exc.code in (403, 404):
                 return None
             raise RepoUnreachable(f"HTTP {exc.code} for {path}") from exc
         except urllib.error.URLError as exc:
