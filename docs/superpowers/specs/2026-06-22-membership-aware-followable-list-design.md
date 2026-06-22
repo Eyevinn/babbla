@@ -1,7 +1,7 @@
 # Spec: Membership-aware "followable projects" advertising in DMs
 
 **Date:** 2026-06-22
-**Status:** Approved (brainstorming)
+**Status:** Implemented on branch `feat/membership-aware-followable-list` — not yet merged (awaiting rollout)
 **Scope:** One bounded change to how the DM flow *advertises* which projects a
 user can follow. No new tier, no schema change, no lobby change.
 
