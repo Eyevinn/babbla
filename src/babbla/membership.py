@@ -8,7 +8,7 @@ from slack_sdk.errors import SlackApiError
 
 logger = logging.getLogger(__name__)
 
-MembershipFn = Callable[[str, "str | None"], Awaitable[bool]]
+MembershipFn = Callable[[str, str | None], Awaitable[bool]]
 
 
 async def deny_membership(user_id: str, channel_id: str | None) -> bool:
@@ -48,6 +48,8 @@ def make_membership(
         except Exception:  # transport / timeout — fail closed
             logger.exception("membership lookup error (%s in %s)", user_id, channel_id)
             found = False
+        # Cache the error-as-False deliberately: fail-closed, prevents hammering Slack
+        # on a bad channel, recovers after TTL expires.
         cache[key] = (found, now + ttl_seconds)
         return found
 

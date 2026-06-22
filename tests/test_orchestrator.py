@@ -556,3 +556,13 @@ async def test_default_oracle_denies_private(store, psub):
     reply = await orch.handle_command("U1", "subscribe Secret")
     assert await psub.list_for("U1") == ()
     assert "<#C2>" in reply
+
+
+async def test_topic_add_private_denied_for_non_member(store, psub):
+    orch = Orchestrator(
+        _config_two(), FakeRunner(), store,
+        personal_store=psub, membership=_member_oracle(False),
+    )
+    reply = await orch.handle_command("U1", "topic add Secret | security | auth, secrets")
+    assert "<#C2>" in reply                      # pointer, not "doesn't exist"
+    assert await psub.topics_for("U1") == {}     # nothing was written
