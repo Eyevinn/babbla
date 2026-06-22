@@ -283,9 +283,10 @@ async def test_handle_command_subscribe_unknown_does_not_leak_private_names(stor
 
 
 async def test_handle_command_subscribe_private_refused(store, psub):
+    # Default (deny) oracle: a non-member cannot follow a private project.
     orch = Orchestrator(_config_two(), FakeRunner(), store, personal_store=psub)
     reply = await orch.handle_command("U1", "subscribe Secret")
-    assert "private" in reply.lower()
+    assert "<#C2>" in reply
     assert await psub.list_for("U1") == ()
 
 
@@ -504,3 +505,64 @@ async def test_lobby_ask_preserves_artifacts_and_scratch_key(store, tmp_path):
     assert ans.artifacts and ans.artifacts[0].filename == "architecture.html"
     assert runner.scratch_keys == ["t1"]
     lobby_store.close()
+
+
+from babbla.membership import deny_membership  # noqa: E402
+
+
+def _member_oracle(is_member, recorder=None):
+    async def fn(user_id, channel_id):
+        if recorder is not None:
+            recorder.append((user_id, channel_id))
+        return is_member
+    return fn
+
+
+async def test_subscribe_private_allowed_for_member(store, psub):
+    orch = Orchestrator(
+        _config_two(), FakeRunner(), store,
+        personal_store=psub, membership=_member_oracle(True),
+    )
+    reply = await orch.handle_command("U1", "subscribe Secret")
+    assert "Secret" in reply
+    assert await psub.list_for("U1") == ("Secret",)
+
+
+async def test_subscribe_private_denied_for_non_member(store, psub):
+    rec = []
+    orch = Orchestrator(
+        _config_two(), FakeRunner(), store,
+        personal_store=psub, membership=_member_oracle(False, rec),
+    )
+    reply = await orch.handle_command("U1", "subscribe Secret")
+    assert "<#C2>" in reply                      # 0007 pointer, not "doesn't exist"
+    assert await psub.list_for("U1") == ()
+    assert rec == [("U1", "C2")]                 # oracle consulted for private
+
+
+async def test_subscribe_public_never_calls_oracle(store, psub):
+    rec = []
+    orch = Orchestrator(
+        _config_two(), FakeRunner(), store,
+        personal_store=psub, membership=_member_oracle(True, rec),
+    )
+    await orch.handle_command("U1", "subscribe MyTV")
+    assert rec == []                             # open-tier short-circuits
+
+
+async def test_default_oracle_denies_private(store, psub):
+    # No membership injected -> deny_membership default.
+    orch = Orchestrator(_config_two(), FakeRunner(), store, personal_store=psub)
+    reply = await orch.handle_command("U1", "subscribe Secret")
+    assert await psub.list_for("U1") == ()
+    assert "<#C2>" in reply
+
+
+async def test_topic_add_private_denied_for_non_member(store, psub):
+    orch = Orchestrator(
+        _config_two(), FakeRunner(), store,
+        personal_store=psub, membership=_member_oracle(False),
+    )
+    reply = await orch.handle_command("U1", "topic add Secret | security | auth, secrets")
+    assert "<#C2>" in reply                      # pointer, not "doesn't exist"
+    assert await psub.topics_for("U1") == {}     # nothing was written

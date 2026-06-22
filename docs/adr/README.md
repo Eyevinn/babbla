@@ -36,6 +36,7 @@ Format is lightweight [Nygard-style](https://cognitect.com/blog/2011/11/15/docum
 | [0014](0014-private-repo-token-access.md) | GitHub token may read specific private/internal repos for onboarding | Accepted |
 | [0015](0015-skilled-answer-path.md) | Skilled answer path — bounded read-only loosening for artifacts | Accepted |
 | [0016](0016-remove-agentmemory.md) | Remove agentmemory entirely — the repo is the only source of "why" | Accepted |
+| [0017](0017-private-personal-subscriptions-on-membership.md) | Personal subscriptions may cover private projects, gated on live channel membership | Accepted |
 
 ADRs 0001–0008 were decided on 2026-06-18 and written from the design proposal
 ([`../PROPOSAL-design.md`](../PROPOSAL-design.md)). ADRs 0009–0010 capture the
@@ -48,4 +49,7 @@ defines the skilled answer path — a bounded, read-only loosening that lets pro
 bindings opt into per-thread scratch-based artifact production. ADR 0016 removes
 agentmemory entirely (2026-06-20): the optional local-enrichment path of 0009 was off
 in production and added read-only surface area, so the repo is now the *only* source of
-"why" Babbla reads.
+"why" Babbla reads. ADR 0017 refines 0007 (2026-06-22): personal subscriptions may now
+cover private projects too, gated on a live check that the user is a member of the
+project's private channel — honoring "access = Slack membership" on the DM/digest
+surfaces instead of blanket-denying them.

@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from babbla.access import is_open_tier
+from babbla.membership import deny_membership
 from babbla.blocks import delete_button_blocks
 from babbla.digest.anchors import changes_between, changes_since, current_head, head_for
 from babbla.digest.topics_match import enrich_changes
@@ -69,7 +70,7 @@ class PerProjectDigestAction:
 
 class PersonalDigestAction:
     def __init__(self, personal_store, state_store, by_name, get_json, runner, poster,
-                 default_cadence: str, tz: str) -> None:
+                 default_cadence: str, tz: str, membership=deny_membership) -> None:
         self._subs = personal_store
         self._state = state_store
         self._by_name = by_name
@@ -78,6 +79,7 @@ class PersonalDigestAction:
         self._poster = poster
         self._default_cadence = default_cadence
         self._tz = tz
+        self._membership = membership
         self.label = "personal-digest"
 
     async def maybe_run(self, now: datetime) -> None:
@@ -95,10 +97,13 @@ class PersonalDigestAction:
         if not is_due(now, state.last_digest_at, cadence, self._tz):
             return
         names = await self._subs.list_for(user_id)
-        bindings = [
-            self._by_name[n] for n in names
-            if n in self._by_name and is_open_tier(self._by_name[n])
-        ]
+        bindings = []
+        for n in names:
+            b = self._by_name.get(n)
+            if b is None:
+                continue
+            if is_open_tier(b) or await self._membership(user_id, b.channel_id):
+                bindings.append(b)
         heads: dict[str, str] = {}
         per_project_changes: dict[str, list] = {}
         for b in bindings:

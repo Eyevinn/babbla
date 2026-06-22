@@ -212,3 +212,45 @@ async def test_topics_scoped_to_changed_projects_only(tmp_path):
         )
 
     subs.close(); state.close()
+
+
+from babbla.membership import deny_membership
+
+
+def _oracle(is_member):
+    async def fn(user_id, channel_id):
+        return is_member
+    return fn
+
+
+async def _run(tmp_path, *, follow, membership):
+    subs = PersonalSubStore(str(tmp_path / "p.db"))
+    state = PersonalDigestStateStore(str(tmp_path / "d.db"))
+    for name in follow:
+        await subs.add("U1", name)
+    runner = FakeRunner()
+    poster = FakePoster()
+    get_json = _get_json_with_commits("HEAD1", [{"sha": "HEAD1", "commit": {"message": "x"}}])
+    action = PersonalDigestAction(
+        subs, state, BY_NAME, get_json, runner, poster, "weekly", "UTC",
+        membership=membership,
+    )
+    await action.maybe_run(NOW)
+    subs.close()
+    state.close()
+    return runner, poster
+
+
+async def test_digest_includes_private_for_member(tmp_path):
+    runner, poster = await _run(tmp_path, follow=["Secret"], membership=_oracle(True))
+    assert poster.posts, "member should receive a digest for the private project"
+
+
+async def test_digest_omits_private_for_non_member(tmp_path):
+    runner, poster = await _run(tmp_path, follow=["Secret"], membership=_oracle(False))
+    assert poster.posts == [], "non-member must not receive private content"
+
+
+async def test_digest_default_oracle_omits_private(tmp_path):
+    runner, poster = await _run(tmp_path, follow=["Secret"], membership=deny_membership)
+    assert poster.posts == []

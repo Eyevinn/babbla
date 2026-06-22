@@ -154,13 +154,6 @@ def render_unknown_project(available: Sequence[str]) -> str:
     return f"🤔 I don't know that project. I can follow: {listing}."
 
 
-def render_private_refused(name: str) -> str:
-    return (
-        f"🔒 *{name}* is private — personal subscriptions only cover "
-        "public/internal projects."
-    )
-
-
 def render_list(names: Sequence[str], cadence: str) -> str:
     if not names:
         return (
