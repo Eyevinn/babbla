@@ -70,8 +70,7 @@ def test_render_help_is_plain_language_not_slash_command():
     assert "subscribe" in out.lower()
 
 
-def test_render_private_and_unknown():
-    assert "private" in personal.render_private_refused("Secret").lower()
+def test_render_unknown():
     assert "MyTV" in personal.render_unknown_project(["MyTV", "Stream"])
 
 

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import asyncio
 
-from babbla.access import Surface, authorize_ask, is_open_tier
+from babbla.access import AccessDecision, Surface, authorize_ask, authorize_personal, is_open_tier
+from babbla.membership import deny_membership
 from babbla.agent_runner import CitedAnswer
 from babbla import lobby, personal, subscriptions
 from babbla.config import Config, ProjectBinding
@@ -17,7 +18,7 @@ class Orchestrator:
         self, config: Config, runner, store, *,
         catalog=(), classify_fn=None, lobby_store=None,
         personal_store=None, personal_default_cadence: str = "weekly",
-        intent_fn=None,
+        intent_fn=None, membership=deny_membership,
     ) -> None:
         self._config = config
         self._runner = runner
@@ -28,6 +29,7 @@ class Orchestrator:
         self._personal_store = personal_store
         self._intent_fn = intent_fn
         self._personal_default_cadence = personal_default_cadence
+        self._membership = membership
         self._locks: dict[str, asyncio.Lock] = {}
 
     def _lock_for(self, thread_ts: str) -> asyncio.Lock:
@@ -54,6 +56,13 @@ class Orchestrator:
             )
         return binding
 
+    async def _authorize_personal(self, user_id: str, binding) -> "AccessDecision":
+        # Open-tier short-circuits BEFORE any Slack call.
+        if is_open_tier(binding):
+            return authorize_personal(binding, is_member=True)
+        member = await self._membership(user_id, binding.channel_id)
+        return authorize_personal(binding, is_member=member)
+
     async def handle_command(self, user_id: str, text: str) -> str:
         return await self._dispatch_command(user_id, personal.parse_command(text))
 
@@ -76,8 +85,9 @@ class Orchestrator:
                 return personal.render_unknown_project(
                     [b.name for b in self._config.bindings if is_open_tier(b)]
                 )
-            if not is_open_tier(binding):
-                return personal.render_private_refused(binding.name)
+            decision = await self._authorize_personal(user_id, binding)
+            if not decision.allowed:
+                return decision.pointer
             if cmd.verb == "topic-remove":
                 await self._personal_store.remove_topic(user_id, binding.name, cmd.name)
                 return personal.render_topic_removed(binding.name, cmd.name)
@@ -94,8 +104,9 @@ class Orchestrator:
                 return personal.render_unknown_project(
                     [b.name for b in self._config.bindings if is_open_tier(b)]
                 )
-            if not is_open_tier(binding):
-                return personal.render_private_refused(binding.name)
+            decision = await self._authorize_personal(user_id, binding)
+            if not decision.allowed:
+                return decision.pointer
             await self._personal_store.add(user_id, binding.name)
             return personal.render_subscribed(binding.name)
         # unsubscribe
@@ -124,7 +135,7 @@ class Orchestrator:
             entries = subscriptions.entries_for(self._catalog, names) if names else ()
             if entries:
                 return await self._handle_personal_ask(
-                    text=text, thread_ts=thread_ts, entries=entries
+                    text=text, thread_ts=thread_ts, entries=entries, user_id=user_id
                 )
         binding = self._resolve(channel_id, is_dm)
         surface = Surface.DM if is_dm else Surface.CHANNEL
@@ -153,7 +164,7 @@ class Orchestrator:
             # sticky project no longer in this subscription → re-route
         return await lobby.route(text, entries, self._classify_fn)
 
-    async def _handle_personal_ask(self, *, text: str, thread_ts: str, entries) -> CitedAnswer:
+    async def _handle_personal_ask(self, *, text: str, thread_ts: str, entries, user_id: str) -> CitedAnswer:
         async with self._lock_for(thread_ts):
             try:
                 entry = await self._resolve_subscription(text, thread_ts, entries)
@@ -161,7 +172,7 @@ class Orchestrator:
                     return CitedAnswer(
                         text=subscriptions.subscription_clarify(entries), session_id=None
                     )
-                decision = authorize_ask(entry.binding, Surface.DM)   # denies private (flip-after-subscribe)
+                decision = await self._authorize_personal(user_id, entry.binding)
                 if not decision.allowed:
                     return CitedAnswer(text=decision.pointer, session_id=None)
                 await self._lobby_store.put(thread_ts, entry.binding.name)
