@@ -1,6 +1,6 @@
 # ADR Action → "Recent ADR Changes" Digest — Design
 
-**Status:** Approved (brainstorming)
+**Status:** Implemented (merged to main)
 **Date:** 2026-06-20
 **Modifies:** the `AdrOfWeekAction` + `AdrRunner` shipped in
 [More Scheduled Actions](2026-06-20-more-scheduled-actions-design.md)

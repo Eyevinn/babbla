@@ -34,7 +34,7 @@
   - `async def set(self, cursor_key: str, value: str) -> None` (UPSERT)
   - `def close(self) -> None`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_action_cursor_store.py`:
 
@@ -73,12 +73,12 @@ async def test_persists_across_instances(tmp_path):
     store2.close()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/python -m pytest tests/test_action_cursor_store.py -v`
 Expected: FAIL with `ImportError: cannot import name 'ActionCursorStore'`.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Append to the end of `src/babbla/session_store.py`:
 
@@ -125,12 +125,12 @@ class ActionCursorStore:
         self._conn.close()
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/python -m pytest tests/test_action_cursor_store.py -v`
 Expected: PASS (4 passed).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/babbla/session_store.py tests/test_action_cursor_store.py
@@ -151,7 +151,7 @@ git commit -m "feat: add ActionCursorStore generic rotation-pointer store"
   - `@dataclass(frozen=True) class StalePR` with fields `number: int`, `title: str`, `author: str`, `url: str`, `idle_days: int`
   - `def stale_prs(owner, repo, *, now, threshold_days, include_drafts, get_json) -> list[StalePR]` — sorted oldest-first (most idle first).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_pulls.py`:
 
@@ -209,12 +209,12 @@ def test_empty_and_none_input():
     assert stale_prs("o", "r", now=NOW, threshold_days=14, include_drafts=False, get_json=lambda p: []) == []
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/python -m pytest tests/test_pulls.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'babbla.digest.pulls'`.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create `src/babbla/digest/pulls.py`:
 
@@ -265,12 +265,12 @@ def stale_prs(owner, repo, *, now, threshold_days, include_drafts, get_json) -> 
     return out
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/python -m pytest tests/test_pulls.py -v`
 Expected: PASS (4 passed).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/babbla/digest/pulls.py tests/test_pulls.py
@@ -292,7 +292,7 @@ git commit -m "feat: add stale_prs open-PR fetch/filter helper"
   - attributes: `label = f"stale-pr:{binding.name}"`, `project = binding.name`
   - `async def maybe_run(self, now) -> None`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_stale_pr_action.py`:
 
@@ -395,7 +395,7 @@ async def test_same_bucket_second_tick_not_due():
     assert poster.posts == []
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/python -m pytest tests/test_stale_pr_action.py -v`
 Expected: FAIL — `ImportError: cannot import name 'StalePRAction'` (and `StalePRConfig`, added in Task 6; if running this task before Task 6, define the import will fail first on `StalePRConfig`). If the `StalePRConfig` import blocks the run, complete Task 6's config dataclass first, then return — but the canonical order keeps Task 6 later, so temporarily this test imports `StalePRConfig` which does not yet exist. To keep tasks independently runnable, add the `StalePRConfig` dataclass as part of THIS task's Step 3 as well (see note).
@@ -412,7 +412,7 @@ Expected: FAIL — `ImportError: cannot import name 'StalePRAction'` (and `Stale
 > ```
 > and add to `ProjectBinding`: `stale_prs: "StalePRConfig | None" = None`.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 At the top of `src/babbla/digest/actions.py`, add to the imports (after the existing `from babbla.digest.cadence import is_due`):
 
@@ -466,12 +466,12 @@ class StalePRAction:
         return "\n".join(lines)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/python -m pytest tests/test_stale_pr_action.py -v`
 Expected: PASS (7 passed).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/babbla/digest/actions.py tests/test_stale_pr_action.py src/babbla/config.py
@@ -492,7 +492,7 @@ git commit -m "feat: add StalePRAction deterministic stale-PR nudge"
   - `class AdrRunner(agent_runner)`
   - `async def teaser(self, binding: ProjectBinding, adr_path: str) -> str`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/test_digest_runner_poster.py`:
 
@@ -512,12 +512,12 @@ async def test_adr_runner_builds_prompt_and_returns_text():
 
 (`SentinelAgent` and `_binding` already exist in this file. `SentinelAgent.run_ask` asserts `resume_session_id is None`, which the runner satisfies.)
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/python -m pytest tests/test_digest_runner_poster.py::test_adr_runner_builds_prompt_and_returns_text -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'babbla.digest.adr'`.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create `src/babbla/digest/adr.py`:
 
@@ -546,12 +546,12 @@ class AdrRunner:
         return answer.text
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/python -m pytest tests/test_digest_runner_poster.py::test_adr_runner_builds_prompt_and_returns_text -v`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/babbla/digest/adr.py tests/test_digest_runner_poster.py
@@ -573,7 +573,7 @@ git commit -m "feat: add AdrRunner read-only ADR teaser generator"
   - attributes: `label = f"adr:{binding.name}"`, `project = binding.name`
   - `async def maybe_run(self, now) -> None`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_adr_action.py`:
 
@@ -704,12 +704,12 @@ async def test_teaser_failure_does_not_advance_cursor_or_timer():
     assert poster.posts == [] and cursor.sets == [] and timer.advanced == []
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/python -m pytest tests/test_adr_action.py -v`
 Expected: FAIL — `ImportError: cannot import name 'AdrOfWeekAction'` (and `AdrConfig`, formally added in Task 6 — same note as Task 3: add the `AdrConfig` dataclass and `ProjectBinding.adr` field now if implementing strictly in order).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 At the top of `src/babbla/digest/actions.py`, add `import re` to the stdlib imports (next to `import logging`):
 
@@ -767,12 +767,12 @@ class AdrOfWeekAction:
         return names[0]
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/python -m pytest tests/test_adr_action.py -v`
 Expected: PASS (8 passed).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/babbla/digest/actions.py tests/test_adr_action.py src/babbla/config.py
@@ -799,7 +799,7 @@ git commit -m "feat: add AdrOfWeekAction rotation + teaser"
   - `Config.stale_pr_bindings() -> tuple[ProjectBinding, ...]`, `Config.adr_bindings() -> tuple[ProjectBinding, ...]`
   - module-level `_parse_stale_prs(name, raw)`, `_parse_adr(name, raw)`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/test_config.py` (and update the top import to include the two new configs):
 
@@ -913,12 +913,12 @@ def test_adr_bindings_requires_channel(tmp_path):
     assert load_config(_write(tmp_path, text)).adr_bindings() == ()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/python -m pytest tests/test_config.py -v`
 Expected: FAIL — `ImportError: cannot import name 'StalePRConfig'` (or, if dataclasses already added in Tasks 3/5, failures on `_parse_stale_prs`/`stale_pr_bindings` not existing).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `src/babbla/config.py`, add the two dataclasses after `QuizConfig` (skip if already added in Tasks 3/5):
 
@@ -986,12 +986,12 @@ In `load_config`, add the two fields to the `ProjectBinding(...)` construction (
             adr=_parse_adr(p["name"], p.get("adr")),
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/python -m pytest tests/test_config.py -v`
 Expected: PASS (all config tests, including the 10 new ones).
 
-- [ ] **Step 5: Document the blocks in `config/channels.yaml`**
+- [x] **Step 5: Document the blocks in `config/channels.yaml`**
 
 In `config/channels.yaml`, extend the existing "Scheduled actions (optional)" comment block (the one documenting `quiz:`). After the `quiz:` documentation lines and before the "Personal Subscriptions (optional)" comment, add:
 
@@ -1011,7 +1011,7 @@ In `config/channels.yaml`, extend the existing "Scheduled actions (optional)" co
 
 > Do **not** alter the existing real `channel_id`/`lobby_channel_id` bindings already in the working copy — only add the commented documentation lines.
 
-- [ ] **Step 6: Run the full config suite again + commit**
+- [x] **Step 6: Run the full config suite again + commit**
 
 Run: `.venv/bin/python -m pytest tests/test_config.py -v`
 Expected: PASS.
@@ -1033,7 +1033,7 @@ git commit -m "feat: parse stale_prs and adr config blocks + document in channel
 - Consumes: `StalePRAction`, `AdrOfWeekAction` (Tasks 3/5); `AdrRunner` (Task 4); `ActionCursorStore` (Task 1); `Config.stale_pr_bindings()`, `Config.adr_bindings()` (Task 6); existing `ActionTimerStore`, `make_get_json`, `SlackPoster`, `AgentRunner`.
 - Produces: a `build_scheduler` that appends a `StalePRAction` per `stale_pr_bindings()` and an `AdrOfWeekAction` per `adr_bindings()`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/test_app.py`:
 
@@ -1088,12 +1088,12 @@ def test_build_scheduler_inert_includes_no_new_actions(tmp_path):
     assert sched._actions == ()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/python -m pytest tests/test_app.py -k "stale_pr or adr" -v`
 Expected: FAIL — `assert kinds == [...]` mismatch (`build_scheduler` does not yet add the new actions; the lists come back empty).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `src/babbla/app.py`, update the actions import to add the two new classes:
 
@@ -1136,12 +1136,12 @@ In `build_scheduler`, after the `quiz_bindings` loop and before the `if config.p
         ))
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/python -m pytest tests/test_app.py -v`
 Expected: PASS (all app tests, including the 3 new ones).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/babbla/app.py tests/test_app.py
@@ -1154,16 +1154,16 @@ git commit -m "feat: wire StalePRAction and AdrOfWeekAction into build_scheduler
 
 **Files:** none (verification only).
 
-- [ ] **Step 1: Run the entire test suite (excluding live integration)**
+- [x] **Step 1: Run the entire test suite (excluding live integration)**
 
 Run: `.venv/bin/python -m pytest -m "not integration" -q`
 Expected: PASS — all prior tests plus the new files green; the count rises by the new tests (~25 new across the 5 new/extended files). Zero failures.
 
-- [ ] **Step 2: If anything fails, debug with systematic-debugging**
+- [x] **Step 2: If anything fails, debug with systematic-debugging**
 
 If a test fails, use the `superpowers:systematic-debugging` skill before changing code. Do not "fix forward" by loosening assertions.
 
-- [ ] **Step 3: Final confirmation**
+- [x] **Step 3: Final confirmation**
 
 Confirm: no new behavior when neither block is configured (`test_build_scheduler_inert_includes_no_new_actions` green), read-only preserved (no repo writes anywhere), and the full suite is green. Report the final passed count.
 

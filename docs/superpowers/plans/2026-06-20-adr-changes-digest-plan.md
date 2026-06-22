@@ -39,7 +39,7 @@
 - Consumes: a `get_json(path) -> object | None` callable (same shape as `babbla.digest.anchors.make_get_json`).
 - Produces: `def changed_adrs(owner, repo, dir, *, since, get_json) -> list[str]` — returns `f"{dir}/{name}"` paths in sorted filename order; `since` is a timezone-aware `datetime` or `None`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_adr_changes.py`:
 
@@ -111,12 +111,12 @@ def test_file_with_no_commit_is_skipped():
     assert changed_adrs("o", "r", "docs/adr", since=since, get_json=gj) == []
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/python -m pytest tests/test_adr_changes.py -v`
 Expected: FAIL with `ImportError: cannot import name 'changed_adrs'`.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Replace the imports block at the top of `src/babbla/digest/adr.py` (currently `from __future__ import annotations` then `from babbla.config import ProjectBinding`) with:
 
@@ -157,12 +157,12 @@ def changed_adrs(owner, repo, dir, *, since, get_json) -> list[str]:
 
 (Leave the existing `AdrRunner` class below it unchanged in this task.)
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/python -m pytest tests/test_adr_changes.py -v`
 Expected: PASS (6 passed).
 
-- [ ] **Step 5: Run the full suite, then commit**
+- [x] **Step 5: Run the full suite, then commit**
 
 Run: `.venv/bin/python -m pytest -m "not integration" -q`
 Expected: PASS (all prior tests + 6 new; nothing else changed yet).
@@ -194,7 +194,7 @@ This task replaces rotation with the digest **atomically** — the runner method
   - `AdrRunner.digest(self, binding: ProjectBinding, adr_paths: list[str]) -> str`
   - `class AdrDigestAction(binding, timer, get_json, runner, poster, cadence, tz, dir)` with `label = f"adr:{binding.name}"`, `project = binding.name`, `async maybe_run(now)`.
 
-- [ ] **Step 1: Rewrite the action test (the failing test)**
+- [x] **Step 1: Rewrite the action test (the failing test)**
 
 Replace the **entire contents** of `tests/test_adr_action.py` with:
 
@@ -321,7 +321,7 @@ async def test_digest_failure_does_not_advance():
     assert poster.posts == [] and timer.advanced == []
 ```
 
-- [ ] **Step 2: Update the AdrRunner test in `tests/test_digest_runner_poster.py`**
+- [x] **Step 2: Update the AdrRunner test in `tests/test_digest_runner_poster.py`**
 
 Replace the existing block (currently the import on line 167 and `test_adr_runner_builds_prompt_and_returns_text`):
 
@@ -356,12 +356,12 @@ async def test_adr_runner_digest_builds_prompt_and_returns_text():
     assert "summary" in p.lower() and "list" in p.lower()            # summary + list structure
 ```
 
-- [ ] **Step 3: Run the tests to verify they fail**
+- [x] **Step 3: Run the tests to verify they fail**
 
 Run: `.venv/bin/python -m pytest tests/test_adr_action.py tests/test_digest_runner_poster.py -q`
 Expected: FAIL — `ImportError: cannot import name 'AdrDigestAction'` (test_adr_action) and `AttributeError`/assertion on `digest` (the runner test).
 
-- [ ] **Step 4: Implement `AdrRunner.digest`**
+- [x] **Step 4: Implement `AdrRunner.digest`**
 
 In `src/babbla/digest/adr.py`, replace the whole `AdrRunner` class (docstring + `teaser` method) with:
 
@@ -390,7 +390,7 @@ class AdrRunner:
         return answer.text
 ```
 
-- [ ] **Step 5: Implement `AdrDigestAction` and drop the old action**
+- [x] **Step 5: Implement `AdrDigestAction` and drop the old action**
 
 In `src/babbla/digest/actions.py`:
 
@@ -450,7 +450,7 @@ class AdrDigestAction:
         await self._timer.advance(self._key, now.timestamp())
 ```
 
-- [ ] **Step 6: Update `build_scheduler` wiring in `src/babbla/app.py`**
+- [x] **Step 6: Update `build_scheduler` wiring in `src/babbla/app.py`**
 
 (a) In the `from babbla.digest.actions import (...)` group, change `AdrOfWeekAction` to `AdrDigestAction`:
 
@@ -486,17 +486,17 @@ from babbla.session_store import (
         ))
 ```
 
-- [ ] **Step 7: Remove `ActionCursorStore` from `src/babbla/session_store.py`**
+- [x] **Step 7: Remove `ActionCursorStore` from `src/babbla/session_store.py`**
 
 Delete the trailing `ActionCursorStore` block — the `_ACTION_CURSOR_SCHEMA` string, the `ActionCursorStore` class, and the two blank lines preceding `_ACTION_CURSOR_SCHEMA` (currently the last ~38 lines of the file, ending the file at `PersonalDigestStateStore.close`).
 
-- [ ] **Step 8: Delete the cursor-store test**
+- [x] **Step 8: Delete the cursor-store test**
 
 ```bash
 git rm tests/test_action_cursor_store.py
 ```
 
-- [ ] **Step 9: Update `tests/test_app.py`**
+- [x] **Step 9: Update `tests/test_app.py`**
 
 (a) Change the import (currently `from babbla.digest.actions import StalePRAction, AdrOfWeekAction`) to:
 
@@ -516,7 +516,7 @@ from babbla.digest.actions import StalePRAction, AdrDigestAction
     assert "StalePRAction" not in names and "AdrDigestAction" not in names
 ```
 
-- [ ] **Step 10: Verify no dangling references, then run the focused tests**
+- [x] **Step 10: Verify no dangling references, then run the focused tests**
 
 Run: `grep -rn "AdrOfWeekAction\|ActionCursorStore\|\.teaser(" src tests`
 Expected: no matches (all renamed/removed).
@@ -524,7 +524,7 @@ Expected: no matches (all renamed/removed).
 Run: `.venv/bin/python -m pytest tests/test_adr_action.py tests/test_digest_runner_poster.py tests/test_app.py -q`
 Expected: PASS.
 
-- [ ] **Step 11: Run the full suite, then commit**
+- [x] **Step 11: Run the full suite, then commit**
 
 Run: `.venv/bin/python -m pytest -m "not integration" -q`
 Expected: PASS (the suite shrinks by the 4 removed cursor-store tests and the net ADR test changes; 0 failures).
@@ -547,19 +547,19 @@ run). Rename AdrOfWeekAction -> AdrDigestAction, AdrRunner.teaser ->
 
 **Files:** none (verification only).
 
-- [ ] **Step 1: Run the entire test suite (excluding live integration)**
+- [x] **Step 1: Run the entire test suite (excluding live integration)**
 
 Run: `.venv/bin/python -m pytest -m "not integration" -q`
 Expected: PASS, 0 failures.
 
-- [ ] **Step 2: Confirm the invariants hold**
+- [x] **Step 2: Confirm the invariants hold**
 
 Confirm by inspection / the passing tests:
 - No `AdrOfWeekAction`, `ActionCursorStore`, or `.teaser(` references remain (`grep -rn "AdrOfWeekAction\|ActionCursorStore\|\.teaser(" src tests` → empty).
 - Read-only preserved (no repo writes; detection is `get_json`; digest via read-only agent).
 - Inert when unconfigured (no `adr:` block → no `AdrDigestAction`).
 
-- [ ] **Step 3: If anything fails, debug with systematic-debugging**
+- [x] **Step 3: If anything fails, debug with systematic-debugging**
 
 Use the `superpowers:systematic-debugging` skill before changing code; do not loosen assertions.
 

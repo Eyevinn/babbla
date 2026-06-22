@@ -1,6 +1,6 @@
 # More Scheduled Actions (Stale-PR Nudge + ADR-of-the-Week) — Design
 
-**Status:** Approved (brainstorming)
+**Status:** Implemented (merged to main)
 **Date:** 2026-06-20
 **Builds on:** [Scheduled Actions Framework](2026-06-19-scheduled-actions-design.md) (the `Action` protocol,
 `ActionScheduler`, `ActionTimerStore`, `SlackPoster.post`, the read-only GitHub path)

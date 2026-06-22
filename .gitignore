@@ -11,3 +11,4 @@ venv/
 *.db
 *.sqlite3
 
+docker-compose.override.yml
