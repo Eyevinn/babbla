@@ -482,3 +482,171 @@ async def test_babbla_command_acks_and_responds():
     assert acked == [True]
     assert orch.command_calls == [("U7", "subscribe MyTV")]
     assert responded == ["command-reply"]
+
+
+# ---------------------------------------------------------------------------
+# Empty-question guard — a bare @mention (or empty DM) must not run the agent.
+# ---------------------------------------------------------------------------
+
+
+class FakeAnswerStore:
+    def __init__(self, mapping=None):
+        self.recorded = []
+        self._mapping = dict(mapping or {})
+
+    async def record(self, channel_id, parent_ts, answer_ts):
+        self.recorded.append((channel_id, parent_ts, answer_ts))
+        self._mapping.setdefault((channel_id, parent_ts), []).append(answer_ts)
+
+    async def pop(self, channel_id, parent_ts):
+        return tuple(self._mapping.pop((channel_id, parent_ts), []))
+
+
+async def test_process_ask_skips_blank_question():
+    client = FakeClient()
+    orch = FakeOrch(answer=CitedAnswer(text="x", session_id="s1"))
+    await process_ask(
+        text="   ", channel="C1", thread_ts="t1", is_dm=False, client=client, orchestrator=orch
+    )
+    assert client.posted is None       # no placeholder
+    assert orch.calls == []            # agent never invoked
+
+
+async def test_mention_handler_ignores_bare_mention():
+    app = FakeApp()
+    client = FakeClient()
+    orch = FakeOrch(answer=CitedAnswer(text="x", session_id="s1"))
+    register_handlers(app, orch)
+    event = {"text": "<@UBOT>", "channel": "C1", "ts": "t1"}   # mention, no question
+    await app.handlers["app_mention"](event=event, client=client)
+    await asyncio.sleep(0)
+    assert orch.calls == []
+    assert client.posted is None
+
+
+async def test_dm_handler_ignores_empty_text():
+    app = FakeApp()
+    client = FakeClient()
+    orch = FakeOrch(answer=CitedAnswer(text="x", session_id="s1"))
+    register_handlers(app, orch)
+    event = {"text": "   ", "channel": "D1", "ts": "t1", "channel_type": "im"}
+    await app.handlers["message"](event=event, client=client)
+    await asyncio.sleep(0)
+    assert orch.calls == []
+    assert client.posted is None
+
+
+# ---------------------------------------------------------------------------
+# Orphan cleanup — deleting a question deletes the bot's now-orphaned reply.
+# ---------------------------------------------------------------------------
+
+
+async def test_process_ask_records_answer_message():
+    client = FakeClient()
+    orch = FakeOrch(answer=CitedAnswer(text="ans", session_id="s1"))
+    store = FakeAnswerStore()
+    await process_ask(
+        text="why?", channel="C1", thread_ts="t1", is_dm=False,
+        client=client, orchestrator=orch, answer_store=store,
+    )
+    assert store.recorded == [("C1", "t1", "msg-1")]   # placeholder ts = answer ts
+
+
+async def test_deletion_handler_removes_orphaned_answer():
+    app = FakeApp()
+    client = FakeClient()
+    orch = FakeOrch()
+    store = FakeAnswerStore(mapping={("C1", "q1"): ["ans-1"]})
+    register_handlers(app, orch, answer_store=store)
+    event = {
+        "channel": "C1", "subtype": "message_deleted",
+        "deleted_ts": "q1", "previous_message": {"ts": "q1", "user": "U7"},
+    }
+    await app.handlers["message"](event=event, client=client)
+    await asyncio.sleep(0)
+    assert client.deleted == [{"channel": "C1", "ts": "ans-1"}]
+
+
+async def test_deletion_handler_noop_when_no_mapping():
+    app = FakeApp()
+    client = FakeClient()
+    orch = FakeOrch()
+    store = FakeAnswerStore()                     # nothing recorded
+    register_handlers(app, orch, answer_store=store)
+    event = {"channel": "C1", "subtype": "message_deleted", "deleted_ts": "q1"}
+    await app.handlers["message"](event=event, client=client)
+    await asyncio.sleep(0)
+    assert client.deleted == []                  # nothing to clean, no crash
+
+
+async def test_deletion_handler_does_not_trigger_ask():
+    """A message_deleted event must never be treated as a new question."""
+    app = FakeApp()
+    client = FakeClient()
+    orch = FakeOrch()
+    store = FakeAnswerStore(mapping={("D1", "q1"): ["ans-1"]})
+    register_handlers(app, orch, answer_store=store)
+    event = {
+        "channel": "D1", "channel_type": "im", "subtype": "message_deleted",
+        "deleted_ts": "q1", "previous_message": {"text": "old", "user": "U7"},
+    }
+    await app.handlers["message"](event=event, client=client)
+    await asyncio.sleep(0)
+    assert orch.calls == []                       # not an ask
+    assert client.deleted == [{"channel": "D1", "ts": "ans-1"}]
+
+
+async def test_tombstone_change_cleans_orphan():
+    """Deleting a question that already has a reply yields a message_changed
+    tombstone (not message_deleted) — cleanup must still fire."""
+    app = FakeApp()
+    client = FakeClient()
+    orch = FakeOrch()
+    store = FakeAnswerStore(mapping={("C1", "q1"): ["ans-1"]})
+    register_handlers(app, orch, answer_store=store)
+    event = {
+        "channel": "C1", "subtype": "message_changed",
+        "message": {"subtype": "tombstone", "ts": "q1"},
+        "previous_message": {"ts": "q1"},
+    }
+    await app.handlers["message"](event=event, client=client)
+    await asyncio.sleep(0)
+    assert client.deleted == [{"channel": "C1", "ts": "ans-1"}]
+    assert orch.calls == []
+
+
+async def test_normal_edit_does_not_clean_or_ask():
+    """A real edit (message_changed without a tombstone) is neither a deletion
+    nor a question."""
+    app = FakeApp()
+    client = FakeClient()
+    orch = FakeOrch()
+    store = FakeAnswerStore(mapping={("C1", "q1"): ["ans-1"]})
+    register_handlers(app, orch, answer_store=store)
+    event = {
+        "channel": "C1", "subtype": "message_changed",
+        "message": {"ts": "q1", "text": "edited"},
+    }
+    await app.handlers["message"](event=event, client=client)
+    await asyncio.sleep(0)
+    assert client.deleted == []
+    assert orch.calls == []
+
+
+async def test_cleanup_swallows_message_not_found():
+    """A best-effort delete of an already-gone message must not raise or log loud."""
+    from slack_sdk.errors import SlackApiError
+
+    class _Client(FakeClient):
+        async def chat_delete(self, *, channel, ts):
+            raise SlackApiError("gone", {"error": "message_not_found"})
+
+    app = FakeApp()
+    client = _Client()
+    orch = FakeOrch()
+    store = FakeAnswerStore(mapping={("C1", "q1"): ["ans-1"]})
+    register_handlers(app, orch, answer_store=store)
+    event = {"channel": "C1", "subtype": "message_deleted", "deleted_ts": "q1"}
+    await app.handlers["message"](event=event, client=client)
+    await asyncio.sleep(0)
+    assert await store.pop("C1", "q1") == ()   # row was still popped, no crash

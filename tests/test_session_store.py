@@ -158,3 +158,63 @@ async def test_personal_topics_isolated_per_user(tmp_path):
     await s.add_topic("U1", "MyTV", "security", "x")
     assert await s.topics_for("U2") == {}
     s.close()
+
+
+# ---------------------------------------------------------------------------
+# AnswerStore — maps a question (channel, parent_ts) -> bot answer message(s)
+# so a deleted question can have its orphaned reply cleaned up.
+# ---------------------------------------------------------------------------
+
+
+async def test_answer_store_record_then_pop(tmp_path):
+    from babbla.session_store import AnswerStore
+    store = AnswerStore(str(tmp_path / "a.db"))
+    await store.record("C1", "q1", "ans1")
+    assert await store.pop("C1", "q1") == ("ans1",)
+    store.close()
+
+
+async def test_answer_store_pop_is_idempotent(tmp_path):
+    from babbla.session_store import AnswerStore
+    store = AnswerStore(str(tmp_path / "a.db"))
+    await store.record("C1", "q1", "ans1")
+    assert await store.pop("C1", "q1") == ("ans1",)
+    assert await store.pop("C1", "q1") == ()   # already removed
+    store.close()
+
+
+async def test_answer_store_pop_unknown_returns_empty(tmp_path):
+    from babbla.session_store import AnswerStore
+    store = AnswerStore(str(tmp_path / "a.db"))
+    assert await store.pop("C1", "nope") == ()
+    store.close()
+
+
+async def test_answer_store_multiple_answers_per_parent(tmp_path):
+    from babbla.session_store import AnswerStore
+    store = AnswerStore(str(tmp_path / "a.db"))
+    await store.record("C1", "q1", "ans1")
+    await store.record("C1", "q1", "ans2")
+    assert set(await store.pop("C1", "q1")) == {"ans1", "ans2"}
+    store.close()
+
+
+async def test_answer_store_channel_scoped(tmp_path):
+    from babbla.session_store import AnswerStore
+    store = AnswerStore(str(tmp_path / "a.db"))
+    await store.record("C1", "q1", "ans1")
+    assert await store.pop("C2", "q1") == ()   # same parent ts, different channel
+    assert await store.pop("C1", "q1") == ("ans1",)
+    store.close()
+
+
+async def test_answer_store_prunes_expired_on_write(tmp_path):
+    from babbla.session_store import AnswerStore
+    clock = {"now": 1000.0}
+    store = AnswerStore(str(tmp_path / "a.db"), ttl_seconds=100, time_fn=lambda: clock["now"])
+    await store.record("C1", "old", "ans-old")
+    clock["now"] = 1201.0                       # past the 100s TTL
+    await store.record("C1", "new", "ans-new")  # write prunes the stale row
+    assert await store.pop("C1", "old") == ()
+    assert await store.pop("C1", "new") == ("ans-new",)
+    store.close()

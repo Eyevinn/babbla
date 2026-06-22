@@ -26,7 +26,7 @@ from babbla.personal import make_intent_fn
 from babbla.orchestrator import Orchestrator
 from babbla.runtime import load_profiles
 from babbla.session_store import (
-    ActionTimerStore, DigestStateStore, LobbyThreadStore,
+    ActionTimerStore, AnswerStore, DigestStateStore, LobbyThreadStore,
     PersonalDigestStateStore, PersonalSubStore, SessionStore,
 )
 from babbla.slack_adapter import register_handlers
@@ -173,7 +173,10 @@ async def main() -> None:
     orchestrator = build_orchestrator(config_path=config_path, db_path=db_path, secrets=secrets)
 
     app = AsyncApp(token=os.environ["SLACK_BOT_TOKEN"])
-    register_handlers(app, orchestrator, lobby_channel_id=config.lobby_channel_id)
+    answer_store = AnswerStore(db_path)
+    register_handlers(
+        app, orchestrator, lobby_channel_id=config.lobby_channel_id, answer_store=answer_store,
+    )
 
     scheduler = build_scheduler(config=config, secrets=secrets, db_path=db_path, client=app.client)
     scheduler_task = asyncio.create_task(scheduler.run())  # retained for the process lifetime

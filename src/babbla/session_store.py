@@ -62,6 +62,72 @@ class SessionStore:
         self._conn.close()
 
 
+_ANSWER_SCHEMA = """
+CREATE TABLE IF NOT EXISTS answer_messages (
+    channel_id TEXT NOT NULL,
+    parent_ts  TEXT NOT NULL,
+    answer_ts  TEXT NOT NULL,
+    created_at REAL NOT NULL,
+    PRIMARY KEY (channel_id, parent_ts, answer_ts)
+)
+"""
+
+
+class AnswerStore:
+    """Maps a question (channel_id, parent_ts) -> the bot answer message(s) posted
+    for it, so that if the asker deletes their question Babbla can delete its now
+    orphaned reply. Best-effort: rows past the TTL are pruned on write so the
+    table can't grow unbounded."""
+
+    def __init__(
+        self,
+        db_path: str,
+        ttl_seconds: int = 7 * 86400,
+        time_fn: Callable[[], float] = time.time,
+    ) -> None:
+        self._ttl = ttl_seconds
+        self._now = time_fn
+        self._conn = sqlite3.connect(db_path, check_same_thread=False)
+        self._conn.execute(_ANSWER_SCHEMA)
+        self._conn.commit()
+
+    async def record(self, channel_id: str, parent_ts: str, answer_ts: str) -> None:
+        await asyncio.to_thread(self._record_sync, channel_id, parent_ts, answer_ts)
+
+    def _record_sync(self, channel_id: str, parent_ts: str, answer_ts: str) -> None:
+        self._conn.execute(
+            "DELETE FROM answer_messages WHERE created_at < ?", (self._now() - self._ttl,)
+        )
+        self._conn.execute(
+            "INSERT OR REPLACE INTO answer_messages "
+            "(channel_id, parent_ts, answer_ts, created_at) VALUES (?, ?, ?, ?)",
+            (channel_id, parent_ts, answer_ts, self._now()),
+        )
+        self._conn.commit()
+
+    async def pop(self, channel_id: str, parent_ts: str) -> tuple[str, ...]:
+        """Return — and remove — every answer ts recorded for this question. Empty
+        when nothing matches, so cleanup is a safe no-op on unrelated deletions
+        (and idempotent against the deletion events our own chat.delete emits)."""
+        return await asyncio.to_thread(self._pop_sync, channel_id, parent_ts)
+
+    def _pop_sync(self, channel_id: str, parent_ts: str) -> tuple[str, ...]:
+        rows = self._conn.execute(
+            "SELECT answer_ts FROM answer_messages WHERE channel_id = ? AND parent_ts = ?",
+            (channel_id, parent_ts),
+        ).fetchall()
+        if rows:
+            self._conn.execute(
+                "DELETE FROM answer_messages WHERE channel_id = ? AND parent_ts = ?",
+                (channel_id, parent_ts),
+            )
+            self._conn.commit()
+        return tuple(r[0] for r in rows)
+
+    def close(self) -> None:
+        self._conn.close()
+
+
 _DIGEST_SCHEMA = """
 CREATE TABLE IF NOT EXISTS digest_state (
     channel_id     TEXT PRIMARY KEY,

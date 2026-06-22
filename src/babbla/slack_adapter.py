@@ -4,6 +4,8 @@ import asyncio
 import logging
 import re
 
+from slack_sdk.errors import SlackApiError
+
 from babbla.blocks import DELETE_ACTION_ID, delete_button_blocks
 from babbla.digest.poster import SlackPoster
 from babbla.orchestrator import Orchestrator
@@ -19,6 +21,24 @@ _MENTION_RE = re.compile(r"^\s*<@[A-Z0-9]+>\s*")
 
 def clean_mention_text(text: str) -> str:
     return _MENTION_RE.sub("", text or "").strip()
+
+
+def _deleted_parent_ts(event: dict) -> str | None:
+    """The ts of a question that was removed, or None if this isn't a removal.
+
+    Slack signals a removal two ways: a hard delete (`message_deleted`), and —
+    when the message already had thread replies — a `message_changed` carrying a
+    `tombstone` (the "This message was deleted" placeholder). The orphan case is
+    *exactly* the latter, since the reply is what makes Babbla's answer dangle.
+    """
+    subtype = event.get("subtype")
+    if subtype == "message_deleted":
+        return event.get("deleted_ts") or (event.get("previous_message") or {}).get("ts")
+    if subtype == "message_changed":
+        msg = event.get("message") or {}
+        if msg.get("subtype") == "tombstone":
+            return msg.get("ts") or (event.get("previous_message") or {}).get("ts")
+    return None
 
 
 def _delete_target(body: dict) -> tuple[str | None, str | None]:
@@ -54,9 +74,17 @@ async def process_ask(
     client,
     orchestrator: Orchestrator,
     user_id: str | None = None,
+    answer_store=None,
 ) -> None:
+    if not text.strip():
+        return  # a mention/DM with no question — nothing to answer, post nothing
     placeholder = await client.chat_postMessage(channel=channel, thread_ts=thread_ts, text=PLACEHOLDER)
     ts = placeholder["ts"]
+    if answer_store is not None:
+        # Remember which message answers this question so deleting the question
+        # can clean up the otherwise-orphaned reply. The placeholder ts is the
+        # answer ts (chat_update edits it in place).
+        await answer_store.record(channel, thread_ts, ts)
     try:
         answer = await orchestrator.handle_ask(
             text=text, thread_ts=thread_ts, channel_id=channel, is_dm=is_dm, user_id=user_id
@@ -76,10 +104,14 @@ async def process_ask(
 
 async def process_lobby_ask(
     *, text: str, channel: str, thread_ts: str, client, orchestrator: Orchestrator,
-    user_id: str | None = None,
+    user_id: str | None = None, answer_store=None,
 ) -> None:
+    if not text.strip():
+        return  # a bare mention in the lobby — nothing to route, post nothing
     placeholder = await client.chat_postMessage(channel=channel, thread_ts=thread_ts, text=PLACEHOLDER)
     ts = placeholder["ts"]
+    if answer_store is not None:
+        await answer_store.record(channel, thread_ts, ts)
     try:
         answer = await orchestrator.handle_lobby_ask(text=text, thread_ts=thread_ts)
         await client.chat_update(
@@ -110,17 +142,22 @@ def _spawn(coro) -> None:
     task.add_done_callback(_log_if_failed)
 
 
-def register_handlers(app, orchestrator: Orchestrator, lobby_channel_id: str | None = None) -> None:
+def register_handlers(
+    app, orchestrator: Orchestrator, lobby_channel_id: str | None = None, answer_store=None,
+) -> None:
     @app.event("app_mention")
     async def _on_mention(event, client):
-        thread_ts = event.get("thread_ts") or event["ts"]
         text = clean_mention_text(event.get("text", ""))
+        if not text:
+            return  # a bare @mention (e.g. inviting Babbla) is not a question
+        thread_ts = event.get("thread_ts") or event["ts"]
         channel = event["channel"]
         if _is_lobby(channel, lobby_channel_id):
             _spawn(
                 process_lobby_ask(
                     text=text, channel=channel, thread_ts=thread_ts,
                     client=client, orchestrator=orchestrator, user_id=event.get("user"),
+                    answer_store=answer_store,
                 )
             )
         else:
@@ -128,31 +165,59 @@ def register_handlers(app, orchestrator: Orchestrator, lobby_channel_id: str | N
                 process_ask(
                     text=text, channel=channel, thread_ts=thread_ts,
                     is_dm=False, client=client, orchestrator=orchestrator,
-                    user_id=event.get("user"),
+                    user_id=event.get("user"), answer_store=answer_store,
                 )
             )
 
+    async def _cleanup_orphan(channel, parent_ts, client):
+        # Delete the bot reply a now-removed question orphaned. pop() returns ()
+        # for anything we didn't answer, so this is a safe no-op on unrelated
+        # deletions — including the deletion events our own chat.delete emits.
+        if answer_store is None or not (channel and parent_ts):
+            return
+        for ts in await answer_store.pop(channel, parent_ts):
+            try:
+                await client.chat_delete(channel=channel, ts=ts)
+            except SlackApiError as e:
+                if (e.response or {}).get("error") == "message_not_found":
+                    continue  # already gone — best-effort cleanup, nothing to do
+                logger.exception("orphan cleanup failed for %s/%s", channel, ts)
+            except Exception:
+                logger.exception("orphan cleanup failed for %s/%s", channel, ts)
+
     @app.event("message")
     async def _on_message(event, client):
-        # DM (Private Ask) only. Ignore bot echoes, non-DM channels, and any event
-        # carrying a subtype — deletions (message_deleted), edits (message_changed),
-        # joins, etc. are not new questions and must never trigger an Ask.
+        # A removed question gets its orphaned answer cleaned up (any channel/DM).
+        # Two shapes: a hard delete (message_deleted), or — when the question
+        # already had a reply — Slack keeps it as a "tombstone" and sends a
+        # message_changed instead of message_deleted. Handle both.
+        parent_ts = _deleted_parent_ts(event)
+        if parent_ts is not None:
+            await _cleanup_orphan(event.get("channel"), parent_ts, client)
+            return
+        # Otherwise: DM (Private Ask) only. Ignore bot echoes, non-DM channels, and
+        # any other subtype — edits (message_changed), joins, etc. are not new
+        # questions and must never trigger an Ask.
         if (
             event.get("channel_type") != "im"
             or event.get("bot_id")
             or event.get("subtype")
         ):
             return
+        text = (event.get("text") or "").strip()
+        if not text:
+            return  # empty DM — nothing to answer
         thread_ts = event.get("thread_ts") or event["ts"]
         _spawn(
             process_ask(
-                text=(event.get("text") or "").strip(),
+                text=text,
                 channel=event["channel"],
                 thread_ts=thread_ts,
                 is_dm=True,
                 client=client,
                 orchestrator=orchestrator,
                 user_id=event.get("user"),
+                answer_store=answer_store,
             )
         )
 
