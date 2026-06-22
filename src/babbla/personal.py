@@ -209,6 +209,21 @@ def render_unsubscribed_many(removed: Sequence[str], skipped: Sequence[tuple[str
     return "\n".join(lines) if lines else "Nothing to do."
 
 
+def render_no_subscriptions(followable_names: Sequence[str]) -> str:
+    """Onboarding redirect for a DM user who follows nothing yet."""
+    if not followable_names:
+        return "There aren't any projects available to follow yet."
+    bullets = "\n".join(f"• {n}" for n in followable_names)
+    example = ", ".join(followable_names[:2])
+    return (
+        "I don't have any projects to look into for you yet — follow one first "
+        "and I'll answer your questions about it.\n\n"
+        "Projects you can follow:\n"
+        f"{bullets}\n\n"
+        f"Just say: `follow {example}`"
+    )
+
+
 def render_unknown_project(available: Sequence[str]) -> str:
     listing = ", ".join(f"*{n}*" for n in available) or "(none yet)"
     return f"🤔 I don't know that project. I can follow: {listing}."

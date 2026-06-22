@@ -96,6 +96,27 @@ def test_render_unknown():
     assert "MyTV" in personal.render_unknown_project(["MyTV", "Stream"])
 
 
+def test_render_no_subscriptions_lists_followable_and_example():
+    out = personal.render_no_subscriptions(["mytv", "babbla", "agentic-engineering-kit"])
+    assert "follow" in out.lower()
+    assert "• mytv" in out
+    assert "• babbla" in out
+    assert "• agentic-engineering-kit" in out
+    assert "follow mytv, babbla" in out          # teaches comma multi-syntax, first two names
+
+
+def test_render_no_subscriptions_single_followable_example():
+    out = personal.render_no_subscriptions(["mytv"])
+    assert "• mytv" in out
+    assert "follow mytv" in out
+
+
+def test_render_no_subscriptions_empty_is_graceful():
+    out = personal.render_no_subscriptions([])
+    assert "•" not in out
+    assert "aren't any" in out.lower()
+
+
 def test_render_subscribed_many_successes_and_skips():
     out = personal.render_subscribed_many(
         ["mytv", "babbla"], [("Secret", "private"), ("Foo", "unknown")]
