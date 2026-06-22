@@ -2,6 +2,22 @@ from __future__ import annotations
 
 DELETE_ACTION_ID = "babbla_delete_message"
 _SECTION_LIMIT = 3000  # Slack section block text hard cap
+_MAX_BLOCKS = 50       # Slack hard cap on blocks per message
+_TEXT_FALLBACK_LIMIT = 3000  # keep the chat.update `text` field well under Slack's 40k cap
+_TRUNCATION_NOTE = "_…answer truncated — it was too long to post in full._"
+
+
+def notification_text(text: str) -> str:
+    """A safe `text` fallback for chat.postMessage/chat.update.
+
+    Slack caps the `text` field at 40k characters and rejects anything longer
+    with `msg_too_long`. The blocks carry the full (chunked) content, so the
+    fallback only needs a short preview. Short answers pass through unchanged.
+    """
+    text = text or " "
+    if len(text) <= _TEXT_FALLBACK_LIMIT:
+        return text
+    return text[: _TEXT_FALLBACK_LIMIT - 1] + "…"
 
 
 def _chunk(text: str, limit: int = _SECTION_LIMIT) -> list[str]:
@@ -33,9 +49,16 @@ def delete_button_blocks(text: str, owner_id: str = "") -> list[dict]:
     The button's value carries owner_id: when set, only that user may delete (the
     handler enforces it); empty means anyone who sees it may delete.
     """
+    chunks = _chunk(text)
+    # Slack rejects messages with more than 50 blocks. Reserve one for the
+    # actions (button) block and, when content overflows, one for a truncation
+    # note, so the message always posts rather than failing wholesale.
+    max_sections = _MAX_BLOCKS - 1
+    if len(chunks) > max_sections:
+        chunks = chunks[: max_sections - 1] + [_TRUNCATION_NOTE]
     blocks: list[dict] = [
         {"type": "section", "text": {"type": "mrkdwn", "text": chunk}}
-        for chunk in _chunk(text)
+        for chunk in chunks
     ]
     button: dict = {
         "type": "button",

@@ -6,7 +6,7 @@ import re
 
 from slack_sdk.errors import SlackApiError
 
-from babbla.blocks import DELETE_ACTION_ID, delete_button_blocks
+from babbla.blocks import DELETE_ACTION_ID, delete_button_blocks, notification_text
 from babbla.digest.poster import SlackPoster
 from babbla.orchestrator import Orchestrator
 
@@ -90,7 +90,7 @@ async def process_ask(
             text=text, thread_ts=thread_ts, channel_id=channel, is_dm=is_dm, user_id=user_id
         )
         await client.chat_update(
-            channel=channel, ts=ts, text=answer.text,
+            channel=channel, ts=ts, text=notification_text(answer.text),
             blocks=delete_button_blocks(answer.text, owner_id=user_id or ""),
         )
         await _upload_artifacts(
@@ -115,7 +115,7 @@ async def process_lobby_ask(
     try:
         answer = await orchestrator.handle_lobby_ask(text=text, thread_ts=thread_ts)
         await client.chat_update(
-            channel=channel, ts=ts, text=answer.text,
+            channel=channel, ts=ts, text=notification_text(answer.text),
             blocks=delete_button_blocks(answer.text, owner_id=user_id or ""),
         )
         await _upload_artifacts(

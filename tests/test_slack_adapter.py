@@ -98,6 +98,21 @@ async def test_process_ask_edits_to_error_on_failure():
     assert client.updates[-1]["text"] == ERROR_TEXT  # no dangling placeholder
 
 
+async def test_process_ask_long_answer_fits_slack_limits():
+    # Regression: a long-form answer (e.g. an onboarding guide) must not exceed
+    # Slack's text-field (40k) or block-count (50) caps -> previously msg_too_long.
+    client = FakeClient()
+    huge = "paragraph of the guide.\n" * 20000   # ~480k chars
+    orch = FakeOrch(answer=CitedAnswer(text=huge, session_id="s1"))
+    await process_ask(
+        text="write an onboarding guide", channel="D9", thread_ts="t9",
+        is_dm=True, client=client, orchestrator=orch,
+    )
+    upd = client.updates[-1]
+    assert len(upd["text"]) <= 40000          # text fallback within Slack's cap
+    assert len(upd["blocks"]) <= 50           # block count within Slack's cap
+
+
 async def test_process_ask_passes_is_dm():
     client = FakeClient()
     orch = FakeOrch(answer=CitedAnswer(text="ok", session_id="s1"))

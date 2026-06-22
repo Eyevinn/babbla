@@ -1,4 +1,4 @@
-from babbla.blocks import DELETE_ACTION_ID, delete_button_blocks
+from babbla.blocks import DELETE_ACTION_ID, delete_button_blocks, notification_text
 
 
 def _button(blocks):
@@ -45,3 +45,20 @@ def test_delete_button_blocks_chunks_long_text():
     assert len(sections) >= 3
     assert all(len(b["text"]["text"]) <= 3000 for b in sections)
     assert "".join(b["text"]["text"] for b in sections) == long
+
+
+def test_delete_button_blocks_caps_block_count_for_huge_text():
+    # Slack rejects messages with >50 blocks. A very long answer must be capped.
+    blocks = delete_button_blocks("line\n" * 50000)   # ~250k chars
+    assert len(blocks) <= 50
+    assert blocks[-1]["type"] == "actions"            # button survives the cap
+    assert all(len(b["text"]["text"]) <= 3000 for b in blocks if b["type"] == "section")
+
+
+def test_notification_text_short_unchanged_long_truncated():
+    # The chat.update `text` fallback is capped by Slack at 40k chars (msg_too_long).
+    assert notification_text("Because PR #58") == "Because PR #58"
+    long = "x" * 50000
+    out = notification_text(long)
+    assert len(out) <= 40000
+    assert len(out) < len(long)
