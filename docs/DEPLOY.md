@@ -193,6 +193,15 @@ The Personal Digest (delivered by DM) additionally requires a `personal_digest:`
 > this scope the ask still answers normally — the artifact upload degrades to a logged no-op
 > rather than a failed interaction.
 
+> **`groups:read` scope (private personal subscriptions, [ADR 0017](adr/0017-private-personal-subscriptions-on-membership.md)):**
+> a user may follow / DM-ask / topic-filter / receive-in-digest a **private** project only while
+> they are a live member of its bound private channel. Babbla verifies this with a Slack
+> `conversations.members` read, which needs the `groups:read` OAuth scope to see private-channel
+> membership (Babbla must also be a member of the channel — it already is, to receive mentions).
+> The check is **fail-closed**: without this scope (or on any lookup error) the membership probe
+> returns "not a member", so private content is simply withheld — never leaked. Public/internal
+> projects are unaffected and incur no membership lookup.
+
 ---
 
 ## Running Babbla in Docker (and per-project skills)
