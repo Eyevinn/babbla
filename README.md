@@ -139,9 +139,12 @@ commented block. Run `babbla-doctor` (or `python -m babbla.doctor`) to see the r
 
 Create an app at <https://api.slack.com/apps>, enable **Socket Mode**, then add:
 
-- **Bot token scopes:** `app_mentions:read`, `chat:write`, `im:history`, `im:write`, and
-  `files:write` (the last lets Babbla post skill artifacts).
-- **Event subscriptions:** `app_mention`, `message.im`
+- **Bot token scopes:** `app_mentions:read`, `chat:write`, `im:history`, `im:write`,
+  `channels:history`, `groups:history`, and `files:write` (the last lets Babbla post skill
+  artifacts; the two `*:history` scopes back the channel events below).
+- **Event subscriptions:** `app_mention`, `message.im`, `message.channels`, `message.groups`
+  (the `message.*` events let Babbla tidy up an orphaned answer when its question is deleted —
+  `message.im` for DMs, `message.channels`/`message.groups` for public/private channels).
 - Enable **Interactivity** (powers the 🗑 delete button) and the **Messages tab** (so DMs are
   delivered), then install and invite the bot to a channel.
 

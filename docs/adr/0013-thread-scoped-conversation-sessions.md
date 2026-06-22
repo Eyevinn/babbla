@@ -46,9 +46,11 @@ receives — differs by surface, so the user-facing follow-up gesture differs to
 - **DM (Private Ask):** the bot receives every message via the `message`/`im`
   handler, so a plain thread reply is delivered and answered. **No re-mention
   needed.**
-- **Channel (Shared Ask / Lobby):** the bot only receives `app_mention` events; a
-  plain thread reply without `@bot` is ignored. **A follow-up must `@`-mention the
-  bot again** — but when it does so *inside the same thread*, `thread_ts` resolves
+- **Channel (Shared Ask / Lobby):** a *question* only reaches the bot via
+  `app_mention`; a plain thread reply without `@bot` is ignored. (The bot also
+  subscribes to `message.channels`/`message.groups`, but those channel `message`
+  events are used solely to clean up an orphaned answer when a question is deleted —
+  never to start an Ask.) **A follow-up must `@`-mention the bot again** — but when it does so *inside the same thread*, `thread_ts` resolves
   to the thread root (`event.thread_ts or event.ts`), the same key as the first
   question, so the re-mention resumes the same session. The mention is the trigger,
   not a new conversation.
