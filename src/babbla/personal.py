@@ -16,10 +16,22 @@ _MGMT_VERBS = {"subscribe", "unsubscribe", "list", "subscriptions", "digest", "t
 class Command:
     verb: str               # subscribe | unsubscribe | list | digest | help
                             # | topic-add | topic-remove | topic-list
-    arg: str | None = None  # project name (sub/unsub) or cadence (digest)
+    arg: str | None = None  # project name(s) (sub/unsub) or cadence (digest)
     project: str | None = None
     name: str | None = None
     description: str | None = None
+
+    @property
+    def projects(self) -> tuple[str, ...]:
+        """Comma-separated project names from `arg` (sub/unsubscribe).
+
+        Comma is the delimiter because names may be multi-word but never
+        contain commas. A single name yields a 1-tuple, preserving
+        single-follow behavior.
+        """
+        if self.arg is None:
+            return ()
+        return tuple(p.strip() for p in self.arg.split(",") if p.strip())
 
 
 def parse_command(text: str) -> Command:

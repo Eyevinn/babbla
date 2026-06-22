@@ -55,6 +55,28 @@ def test_parse_is_case_insensitive_on_verb():
     assert personal.parse_command("SUBSCRIBE MyTV") == Command("subscribe", "MyTV")
 
 
+def test_command_projects_splits_on_comma():
+    assert personal.parse_command("subscribe mytv, babbla, agentic-engineering-kit").projects == (
+        "mytv", "babbla", "agentic-engineering-kit"
+    )
+
+
+def test_command_projects_single_is_one_tuple():
+    assert personal.parse_command("subscribe MyTV").projects == ("MyTV",)
+
+
+def test_command_projects_multiword_single_name_survives():
+    assert personal.parse_command("subscribe Stream Starter").projects == ("Stream Starter",)
+
+
+def test_command_projects_tolerates_spacing_and_trailing_comma():
+    assert personal.parse_command("subscribe a ,  b ,").projects == ("a", "b")
+
+
+def test_command_projects_none_arg_is_empty():
+    assert personal.Command("list").projects == ()
+
+
 def test_render_list_with_and_without_subs():
     assert "MyTV" in personal.render_list(["MyTV"], "weekly")
     assert "weekly" in personal.render_list(["MyTV"], "weekly")
