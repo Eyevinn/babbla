@@ -134,6 +134,22 @@ async def test_classify_intent_unsubscribe():
     ) == Command("unsubscribe", "MyTV")
 
 
+async def test_classify_intent_subscribe_multiple_comma_form():
+    cmd = await personal.classify_intent(
+        "follow A, B and C", ["A", "B", "C"], _intent("subscribe A, B, C")
+    )
+    assert cmd.verb == "subscribe"
+    assert cmd.projects == ("A", "B", "C")
+
+
+async def test_classify_intent_unsubscribe_multiple_comma_form():
+    cmd = await personal.classify_intent(
+        "unfollow X and Y", ["X", "Y"], _intent("unsubscribe X, Y")
+    )
+    assert cmd.verb == "unsubscribe"
+    assert cmd.projects == ("X", "Y")
+
+
 async def test_classify_intent_prose_reply_is_not_a_command():
     # Classifier answered in prose rather than the command grammar → fall through to Q&A.
     assert await personal.classify_intent(
