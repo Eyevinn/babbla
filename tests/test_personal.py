@@ -96,6 +96,31 @@ def test_render_unknown():
     assert "MyTV" in personal.render_unknown_project(["MyTV", "Stream"])
 
 
+def test_render_subscribed_many_successes_and_skips():
+    out = personal.render_subscribed_many(
+        ["mytv", "babbla"], [("Secret", "private"), ("Foo", "unknown")]
+    )
+    assert "mytv" in out and "babbla" in out
+    assert "✅" in out
+    assert "Secret" in out and "private" in out
+    assert "Foo" in out and "don't know" in out.lower()
+
+
+def test_render_subscribed_many_all_skipped_has_no_success_line():
+    out = personal.render_subscribed_many([], [("Foo", "unknown")])
+    assert "✅" not in out
+    assert "Foo" in out
+
+
+def test_render_unsubscribed_many_successes_and_skips():
+    out = personal.render_unsubscribed_many(
+        ["mytv"], [("Foo", "unknown"), ("babbla", "not following")]
+    )
+    assert "mytv" in out
+    assert "Foo" in out and "don't know" in out.lower()
+    assert "babbla" in out and "not following" in out.lower()
+
+
 def _intent(reply):
     async def fn(text, names):
         return reply

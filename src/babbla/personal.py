@@ -166,6 +166,49 @@ def render_unsubscribed(name: str) -> str:
     return f"Unsubscribed from *{name}*."
 
 
+_SKIP_REASONS = {
+    "private": "private",
+    "unknown": "don't know that one",
+    "not following": "not following that one",
+}
+
+
+def _and_join(names: Sequence[str]) -> str:
+    """'a' / 'a and b' / 'a, b and c' with each name *emphasised*."""
+    marked = [f"*{n}*" for n in names]
+    if len(marked) <= 1:
+        return marked[0] if marked else ""
+    return ", ".join(marked[:-1]) + " and " + marked[-1]
+
+
+def _skip_clause(skipped: Sequence[tuple[str, str]]) -> str:
+    parts = [f'"{name}" ({_SKIP_REASONS.get(reason, reason)})' for name, reason in skipped]
+    if not parts:
+        return ""
+    joined = parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
+    return f"⚠️ Skipped {joined}."
+
+
+def render_subscribed_many(subscribed: Sequence[str], skipped: Sequence[tuple[str, str]]) -> str:
+    lines = []
+    if subscribed:
+        lines.append(f"✅ Subscribed to {_and_join(subscribed)}.")
+    skip = _skip_clause(skipped)
+    if skip:
+        lines.append(skip)
+    return "\n".join(lines) if lines else "Nothing to do."
+
+
+def render_unsubscribed_many(removed: Sequence[str], skipped: Sequence[tuple[str, str]]) -> str:
+    lines = []
+    if removed:
+        lines.append(f"Unsubscribed from {_and_join(removed)}.")
+    skip = _skip_clause(skipped)
+    if skip:
+        lines.append(skip)
+    return "\n".join(lines) if lines else "Nothing to do."
+
+
 def render_unknown_project(available: Sequence[str]) -> str:
     listing = ", ".join(f"*{n}*" for n in available) or "(none yet)"
     return f"🤔 I don't know that project. I can follow: {listing}."
