@@ -173,13 +173,19 @@ class Orchestrator:
             if cmd is not None:
                 reply = await self._dispatch_command(user_id, cmd)
                 return CitedAnswer(text=reply, session_id=None)
-        if is_dm and self._personal_store is not None and user_id is not None and self._catalog:
+        if is_dm and self._personal_store is not None and user_id is not None:
             names = await self._personal_store.list_for(user_id)
-            entries = subscriptions.entries_for(self._catalog, names) if names else ()
-            if entries:
-                return await self._handle_personal_ask(
-                    text=text, thread_ts=thread_ts, entries=entries, user_id=user_id
-                )
+            if not names:
+                # Onboarding gate: an unsubscribed DM user is redirected to follow
+                # a project first — no agent run, no default-binding Q&A.
+                followable = [b.name for b in self._config.bindings if is_open_tier(b)]
+                return CitedAnswer(text=personal.render_no_subscriptions(followable), session_id=None)
+            if self._catalog:
+                entries = subscriptions.entries_for(self._catalog, names)
+                if entries:
+                    return await self._handle_personal_ask(
+                        text=text, thread_ts=thread_ts, entries=entries, user_id=user_id
+                    )
         binding = self._resolve(channel_id, is_dm)
         surface = Surface.DM if is_dm else Surface.CHANNEL
         decision = authorize_ask(binding, surface)
