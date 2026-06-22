@@ -657,3 +657,74 @@ async def test_dispatch_unsubscribe_many(store, psub):
     assert "MyTV" in reply
     assert "Ghost" in reply and "don't know" in reply.lower()
     assert "Secret" in reply and "not following" in reply.lower()
+
+
+# ---------------------------------------------------------------------------
+# Membership-aware "followable projects" advertising (DM only)
+# ---------------------------------------------------------------------------
+
+
+async def test_onboarding_gate_shows_private_for_member(store, psub):
+    # A member of the private channel sees it in the "projects you can follow"
+    # list, alongside the open-tier one.
+    orch = Orchestrator(
+        _config_two(), FakeRunner(), store,
+        personal_store=psub, membership=_member_oracle(True),
+    )
+    ans = await orch.handle_ask(
+        text="anything?", thread_ts="t1", channel_id="D1", is_dm=True, user_id="U1",
+    )
+    assert ans.session_id is None
+    assert "MyTV" in ans.text                 # open-tier always advertised
+    assert "Secret" in ans.text               # private surfaced to the member
+
+
+async def test_onboarding_gate_hides_private_for_non_member(store, psub):
+    # Default (deny) oracle: a non-member never sees the private name.
+    orch = Orchestrator(_config_two(), FakeRunner(), store, personal_store=psub)
+    ans = await orch.handle_ask(
+        text="anything?", thread_ts="t1", channel_id="D1", is_dm=True, user_id="U1",
+    )
+    assert "MyTV" in ans.text
+    assert "Secret" not in ans.text
+
+
+async def test_onboarding_gate_open_tier_only_skips_oracle(store, psub):
+    # No private bindings -> the membership oracle is never consulted.
+    rec = []
+    cfg = Config(bindings=(
+        ProjectBinding("MyTV", "o", "MyTV", "public", "C1", True),
+        ProjectBinding("Stream", "o", "stream", "internal", "C2", False),
+    ))
+    orch = Orchestrator(
+        cfg, FakeRunner(), store,
+        personal_store=psub, membership=_member_oracle(True, rec),
+    )
+    ans = await orch.handle_ask(
+        text="anything?", thread_ts="t1", channel_id="D1", is_dm=True, user_id="U1",
+    )
+    assert rec == []                          # open-tier short-circuits, no call
+    assert "MyTV" in ans.text and "Stream" in ans.text
+
+
+async def test_subscribe_unknown_hint_shows_private_for_member(store, psub):
+    # A member who fat-fingers a follow target is reminded of every project they
+    # may follow — including the private one they have access to.
+    orch = Orchestrator(
+        _config_two(), FakeRunner(), store,
+        personal_store=psub, membership=_member_oracle(True),
+    )
+    reply = await orch.handle_command("U1", "subscribe Ghost")
+    assert "don't know" in reply.lower()
+    assert "MyTV" in reply
+    assert "Secret" in reply                  # private surfaced to the member
+
+
+async def test_topic_add_unknown_hint_shows_private_for_member(store, psub):
+    orch = Orchestrator(
+        _config_two(), FakeRunner(), store,
+        personal_store=psub, membership=_member_oracle(True),
+    )
+    reply = await orch.handle_command("U1", "topic add Ghost | security | auth")
+    assert "MyTV" in reply
+    assert "Secret" in reply
