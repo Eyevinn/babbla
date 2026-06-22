@@ -140,8 +140,10 @@ commented block. Run `babbla-doctor` (or `python -m babbla.doctor`) to see the r
 Create an app at <https://api.slack.com/apps>, enable **Socket Mode**, then add:
 
 - **Bot token scopes:** `app_mentions:read`, `chat:write`, `im:history`, `im:write`,
-  `channels:history`, `groups:history`, and `files:write` (the last lets Babbla post skill
-  artifacts; the two `*:history` scopes back the channel events below).
+  `channels:history`, `groups:history`, `groups:read`, and `files:write` (`files:write` lets
+  Babbla post skill artifacts; the two `*:history` scopes back the channel events below;
+  `groups:read` lets Babbla verify private-channel membership so private projects can be followed
+  in personal subscriptions — fail-closed, see [ADR 0017](docs/adr/0017-private-personal-subscriptions-on-membership.md)).
 - **Event subscriptions:** `app_mention`, `message.im`, `message.channels`, `message.groups`
   (the `message.*` events let Babbla tidy up an orphaned answer when its question is deleted —
   `message.im` for DMs, `message.channels`/`message.groups` for public/private channels).
