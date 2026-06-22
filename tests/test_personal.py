@@ -55,6 +55,28 @@ def test_parse_is_case_insensitive_on_verb():
     assert personal.parse_command("SUBSCRIBE MyTV") == Command("subscribe", "MyTV")
 
 
+def test_command_projects_splits_on_comma():
+    assert personal.parse_command("subscribe mytv, babbla, agentic-engineering-kit").projects == (
+        "mytv", "babbla", "agentic-engineering-kit"
+    )
+
+
+def test_command_projects_single_is_one_tuple():
+    assert personal.parse_command("subscribe MyTV").projects == ("MyTV",)
+
+
+def test_command_projects_multiword_single_name_survives():
+    assert personal.parse_command("subscribe Stream Starter").projects == ("Stream Starter",)
+
+
+def test_command_projects_tolerates_spacing_and_trailing_comma():
+    assert personal.parse_command("subscribe a ,  b ,").projects == ("a", "b")
+
+
+def test_command_projects_none_arg_is_empty():
+    assert personal.Command("list").projects == ()
+
+
 def test_render_list_with_and_without_subs():
     assert "MyTV" in personal.render_list(["MyTV"], "weekly")
     assert "weekly" in personal.render_list(["MyTV"], "weekly")
@@ -72,6 +94,52 @@ def test_render_help_is_plain_language_not_slash_command():
 
 def test_render_unknown():
     assert "MyTV" in personal.render_unknown_project(["MyTV", "Stream"])
+
+
+def test_render_no_subscriptions_lists_followable_and_example():
+    out = personal.render_no_subscriptions(["mytv", "babbla", "agentic-engineering-kit"])
+    assert "follow" in out.lower()
+    assert "• mytv" in out
+    assert "• babbla" in out
+    assert "• agentic-engineering-kit" in out
+    assert "follow mytv, babbla" in out          # teaches comma multi-syntax, first two names
+
+
+def test_render_no_subscriptions_single_followable_example():
+    out = personal.render_no_subscriptions(["mytv"])
+    assert "• mytv" in out
+    assert "follow mytv" in out
+
+
+def test_render_no_subscriptions_empty_is_graceful():
+    out = personal.render_no_subscriptions([])
+    assert "•" not in out
+    assert "aren't any" in out.lower()
+
+
+def test_render_subscribed_many_successes_and_skips():
+    out = personal.render_subscribed_many(
+        ["mytv", "babbla"], [("Secret", "private"), ("Foo", "unknown")]
+    )
+    assert "mytv" in out and "babbla" in out
+    assert "✅" in out
+    assert "Secret" in out and "private" in out
+    assert "Foo" in out and "don't know" in out.lower()
+
+
+def test_render_subscribed_many_all_skipped_has_no_success_line():
+    out = personal.render_subscribed_many([], [("Foo", "unknown")])
+    assert "✅" not in out
+    assert "Foo" in out
+
+
+def test_render_unsubscribed_many_successes_and_skips():
+    out = personal.render_unsubscribed_many(
+        ["mytv"], [("Foo", "unknown"), ("babbla", "not following")]
+    )
+    assert "mytv" in out
+    assert "Foo" in out and "don't know" in out.lower()
+    assert "babbla" in out and "not following" in out.lower()
 
 
 def _intent(reply):
@@ -110,6 +178,22 @@ async def test_classify_intent_unsubscribe():
     assert await personal.classify_intent(
         "stop sending me MyTV", ["MyTV"], _intent("unsubscribe MyTV")
     ) == Command("unsubscribe", "MyTV")
+
+
+async def test_classify_intent_subscribe_multiple_comma_form():
+    cmd = await personal.classify_intent(
+        "follow A, B and C", ["A", "B", "C"], _intent("subscribe A, B, C")
+    )
+    assert cmd.verb == "subscribe"
+    assert cmd.projects == ("A", "B", "C")
+
+
+async def test_classify_intent_unsubscribe_multiple_comma_form():
+    cmd = await personal.classify_intent(
+        "unfollow X and Y", ["X", "Y"], _intent("unsubscribe X, Y")
+    )
+    assert cmd.verb == "unsubscribe"
+    assert cmd.projects == ("X", "Y")
 
 
 async def test_classify_intent_prose_reply_is_not_a_command():

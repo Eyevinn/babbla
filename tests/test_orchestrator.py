@@ -313,9 +313,12 @@ async def test_dm_management_intent_dispatches_without_invoking_runner(store, ps
 
 
 async def test_dm_non_management_falls_through_to_qa(store, psub):
+    # A NONE-classified message is not dispatched as a command and reaches the
+    # Q&A agent. The user must be subscribed, else the onboarding gate fires.
     runner = FakeRunner()
     orch = Orchestrator(_config_two(), runner, store, personal_store=psub,
                         intent_fn=_intent_fn("NONE"))
+    await psub.add("U1", "MyTV")
     ans = await orch.handle_ask(
         text="how does the digest work?", thread_ts="t1",
         channel_id="D1", is_dm=True, user_id="U1",
@@ -366,13 +369,59 @@ def _catalog_two():
     return (CatalogEntry(pub, None), CatalogEntry(other, None))
 
 
-async def test_dm_empty_subs_falls_back_to_dm_true(store, psub):
-    # CONFIG has the single dm:true MyTV binding (module-level in this file)
+async def test_dm_empty_subs_hits_onboarding_gate(store, psub):
+    # Unsubscribed DM question → onboarding redirect, no agent run.
     orch = Orchestrator(CONFIG, FakeRunner(), store, personal_store=psub, catalog=_catalog_two())
     runner = orch._runner
     ans = await orch.handle_ask(text="q", thread_ts="t1", channel_id="D1", is_dm=True, user_id="U1")
-    assert runner.calls[0][1].name == "MyTV"   # fell back to dm:true project
+    assert ans.session_id is None
+    assert runner.calls == []                       # default DM binding NOT reached
+    assert "follow" in ans.text.lower()
+    assert "MyTV" in ans.text                        # CONFIG's open-tier project advertised
+
+
+async def test_dm_unsubscribed_follow_command_still_works(store, psub):
+    # Command classification precedes the gate, so "follow MyTV" subscribes.
+    runner = FakeRunner()
+    orch = Orchestrator(CONFIG, runner, store, personal_store=psub,
+                        intent_fn=_intent_fn("subscribe MyTV"))
+    ans = await orch.handle_ask(
+        text="follow MyTV", thread_ts="t1", channel_id="D1", is_dm=True, user_id="U1",
+    )
+    assert await psub.list_for("U1") == ("MyTV",)
+    assert runner.calls == []
+    assert "MyTV" in ans.text
+
+
+async def test_dm_subscribed_question_unchanged(store, psub):
+    orch = Orchestrator(CONFIG, FakeRunner(), store, personal_store=psub,
+                        catalog=_catalog_two(), lobby_store=_FakeLobbyStore())
+    await psub.add("U1", "MyTV")
+    ans = await orch.handle_ask(text="why HLS", thread_ts="t1", channel_id="D1", is_dm=True, user_id="U1")
+    assert ans.text == "answer to why HLS"           # routed to the Q&A agent as before
+
+
+async def test_channel_ask_never_hits_onboarding_gate(store, psub):
+    # is_dm False → gate does not apply; normal channel Ask runs.
+    orch = Orchestrator(CONFIG, FakeRunner(), store, personal_store=psub)
+    ans = await orch.handle_ask(text="q", thread_ts="t1", channel_id="C123", is_dm=False, user_id="U1")
     assert ans.text == "answer to q"
+
+
+async def test_dm_no_personal_store_unchanged(store):
+    # personal_store None → back-compat: falls to default DM binding, runs agent.
+    orch = Orchestrator(CONFIG, FakeRunner(), store)
+    ans = await orch.handle_ask(text="q", thread_ts="t1", channel_id="D1", is_dm=True, user_id="U1")
+    assert ans.text == "answer to q"
+
+
+async def test_dm_onboarding_gate_empty_followable_is_graceful(store, psub):
+    # A config whose only binding is private → no followable names → graceful variant.
+    priv_only = Config(bindings=(ProjectBinding("Secret", "o", "secret", "private", "C2", True),))
+    orch = Orchestrator(priv_only, FakeRunner(), store, personal_store=psub)
+    ans = await orch.handle_ask(text="q", thread_ts="t1", channel_id="D1", is_dm=True, user_id="U1")
+    assert orch._runner.calls == []
+    assert "aren't any" in ans.text.lower()
 
 
 async def test_dm_size1_answers_directly_no_classifier(store, psub):
@@ -566,3 +615,45 @@ async def test_topic_add_private_denied_for_non_member(store, psub):
     reply = await orch.handle_command("U1", "topic add Secret | security | auth, secrets")
     assert "<#C2>" in reply                      # pointer, not "doesn't exist"
     assert await psub.topics_for("U1") == {}     # nothing was written
+
+
+# ---------------------------------------------------------------------------
+# Multi-follow / unfollow dispatch
+# ---------------------------------------------------------------------------
+
+
+async def test_dispatch_subscribe_many_partitions_valid_unknown_private(store, psub):
+    # default (deny) oracle: "Secret" is private and the user is not a member
+    orch = Orchestrator(_config_two(), FakeRunner(), store, personal_store=psub)
+    reply = await orch.handle_command("U1", "subscribe MyTV, Secret, Ghost")
+    assert await psub.list_for("U1") == ("MyTV",)          # only the valid open-tier one added
+    assert "MyTV" in reply
+    assert "Secret" in reply and "private" in reply
+    assert "Ghost" in reply and "don't know" in reply.lower()
+
+
+async def test_dispatch_subscribe_many_dedupes_already_followed(store, psub):
+    orch = Orchestrator(_config_two(), FakeRunner(), store, personal_store=psub)
+    await psub.add("U1", "MyTV")
+    await orch.handle_command("U1", "subscribe MyTV, MyTV")
+    assert await psub.list_for("U1") == ("MyTV",)          # no duplicate row
+
+
+async def test_dispatch_subscribe_many_private_allowed_for_member(store, psub):
+    orch = Orchestrator(_config_two(), FakeRunner(), store, personal_store=psub,
+                        membership=_member_oracle(True))
+    reply = await orch.handle_command("U1", "subscribe MyTV, Secret")
+    assert set(await psub.list_for("U1")) == {"MyTV", "Secret"}
+    assert "MyTV" in reply and "Secret" in reply
+
+
+async def test_dispatch_unsubscribe_many(store, psub):
+    # MyTV: followed -> removed. Secret: exists in config but not followed ->
+    # "not following". Ghost: no binding -> "unknown".
+    orch = Orchestrator(_config_two(), FakeRunner(), store, personal_store=psub)
+    await psub.add("U1", "MyTV")
+    reply = await orch.handle_command("U1", "unsubscribe MyTV, Secret, Ghost")
+    assert await psub.list_for("U1") == ()                 # MyTV removed
+    assert "MyTV" in reply
+    assert "Ghost" in reply and "don't know" in reply.lower()
+    assert "Secret" in reply and "not following" in reply.lower()

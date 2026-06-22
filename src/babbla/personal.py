@@ -16,10 +16,22 @@ _MGMT_VERBS = {"subscribe", "unsubscribe", "list", "subscriptions", "digest", "t
 class Command:
     verb: str               # subscribe | unsubscribe | list | digest | help
                             # | topic-add | topic-remove | topic-list
-    arg: str | None = None  # project name (sub/unsub) or cadence (digest)
+    arg: str | None = None  # project name(s) (sub/unsub) or cadence (digest)
     project: str | None = None
     name: str | None = None
     description: str | None = None
+
+    @property
+    def projects(self) -> tuple[str, ...]:
+        """Comma-separated project names from `arg` (sub/unsubscribe).
+
+        Comma is the delimiter because names may be multi-word but never
+        contain commas. A single name yields a 1-tuple, preserving
+        single-follow behavior.
+        """
+        if self.arg is None:
+            return ()
+        return tuple(p.strip() for p in self.arg.split(",") if p.strip())
 
 
 def parse_command(text: str) -> Command:
@@ -93,8 +105,8 @@ def make_intent_fn(query_fn, profile: RuntimeProfile):
             "(a) MANAGING their personal project subscriptions, (b) MANAGING their "
             "personal digest TOPICS (thematic filters on a followed project), or (c) "
             "asking a question about a project. Output EXACTLY one of:\n"
-            "  subscribe <project name>\n"
-            "  unsubscribe <project name>\n"
+            "  subscribe <project name>[, <project name>, ...]\n"
+            "  unsubscribe <project name>[, <project name>, ...]\n"
             "  list\n"
             "  digest daily   (or: digest weekly | digest off)\n"
             "  topic add <project name> | <topic name> | <description>\n"
@@ -103,7 +115,9 @@ def make_intent_fn(query_fn, profile: RuntimeProfile):
             "  NONE\n\n"
             "Map the user's wording, e.g.:\n"
             "  'follow MyTV' / 'subscribe me to MyTV' / 'add MyTV'        -> subscribe MyTV\n"
+            "  'follow A, B and C' / 'subscribe me to A, B, C'           -> subscribe A, B, C\n"
             "  'stop following MyTV' / 'drop MyTV' / 'mute MyTV'          -> unsubscribe MyTV\n"
+            "  'unfollow X and Y' / 'drop X and Y'                       -> unsubscribe X, Y\n"
             "  'what am I following?' / 'my subs'                         -> list\n"
             "  'send my digest daily' / 'pause my digest'                -> digest daily|weekly|off\n"
             "  'only show me security in MyTV' / 'filter MyTV to security'\n"
@@ -117,6 +131,9 @@ def make_intent_fn(query_fn, profile: RuntimeProfile):
             "For `topic add`, ALWAYS supply a useful <description>: expand the user's short "
             "topic name into a comma-separated phrase of the concepts it should match, so the "
             "digest can filter on it. Use the user's own description verbatim if they gave one. "
+            "When the user names MULTIPLE projects, separate them with COMMAS in your "
+            "output (e.g. `subscribe A, B, C`) — commas are the delimiter because names "
+            "may contain spaces. "
             "Copy a project name EXACTLY as written in the list. "
             "IMPORTANT: any request to SEE or LIST the user's OWN subscriptions, topics, or "
             "filters is ALWAYS a management command (`list` or `topic list`) — NEVER NONE, even "
@@ -147,6 +164,64 @@ def render_subscribed(name: str) -> str:
 
 def render_unsubscribed(name: str) -> str:
     return f"Unsubscribed from *{name}*."
+
+
+_SKIP_REASONS = {
+    "private": "private",
+    "unknown": "don't know that one",
+    "not following": "not following that one",
+}
+
+
+def _and_join(names: Sequence[str]) -> str:
+    """'a' / 'a and b' / 'a, b and c' with each name *emphasised*."""
+    marked = [f"*{n}*" for n in names]
+    if len(marked) <= 1:
+        return marked[0] if marked else ""
+    return ", ".join(marked[:-1]) + " and " + marked[-1]
+
+
+def _skip_clause(skipped: Sequence[tuple[str, str]]) -> str:
+    parts = [f'"{name}" ({_SKIP_REASONS.get(reason, reason)})' for name, reason in skipped]
+    if not parts:
+        return ""
+    joined = parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
+    return f"⚠️ Skipped {joined}."
+
+
+def render_subscribed_many(subscribed: Sequence[str], skipped: Sequence[tuple[str, str]]) -> str:
+    lines = []
+    if subscribed:
+        lines.append(f"✅ Subscribed to {_and_join(subscribed)}.")
+    skip = _skip_clause(skipped)
+    if skip:
+        lines.append(skip)
+    return "\n".join(lines) if lines else "Nothing to do."
+
+
+def render_unsubscribed_many(removed: Sequence[str], skipped: Sequence[tuple[str, str]]) -> str:
+    lines = []
+    if removed:
+        lines.append(f"Unsubscribed from {_and_join(removed)}.")
+    skip = _skip_clause(skipped)
+    if skip:
+        lines.append(skip)
+    return "\n".join(lines) if lines else "Nothing to do."
+
+
+def render_no_subscriptions(followable_names: Sequence[str]) -> str:
+    """Onboarding redirect for a DM user who follows nothing yet."""
+    if not followable_names:
+        return "There aren't any projects available to follow yet."
+    bullets = "\n".join(f"• {n}" for n in followable_names)
+    example = ", ".join(followable_names[:2])
+    return (
+        "I don't have any projects to look into for you yet — follow one first "
+        "and I'll answer your questions about it.\n\n"
+        "Projects you can follow:\n"
+        f"{bullets}\n\n"
+        f"Just say: `follow {example}`"
+    )
 
 
 def render_unknown_project(available: Sequence[str]) -> str:
