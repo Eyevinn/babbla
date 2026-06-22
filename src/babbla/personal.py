@@ -250,6 +250,7 @@ def render_help() -> str:
     return (
         "*Personal subscriptions* — just tell me in a DM, in plain language:\n"
         '• "follow MyTV" / "subscribe me to MyTV" — follow a project\n'
+        '• "follow MyTV, Stream Starter and Simulcast" — follow several at once\n'
         '• "stop following MyTV" / "mute MyTV" — stop following\n'
         '• "what am I following?" — show your projects and digest cadence\n'
         '• "make my digest daily" / "pause my digest" — set your digest cadence\n'

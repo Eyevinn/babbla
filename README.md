@@ -32,7 +32,9 @@ Real questions it answers: *"What shipped to production this week?"* · *"Why di
 · *"Is feature Y live yet, or still in preview?"*
 
 Follow the projects you care about and set your own digest cadence just by telling Babbla in a
-DM — *"follow MyTV"*, *"what am I following?"*, *"make my digest weekly"*.
+DM — *"follow MyTV"*, *"follow MyTV, Stream Starter and Simulcast"*, *"what am I following?"*,
+*"make my digest weekly"*. Ask a question before you follow anything and Babbla points you at the
+projects you can follow first.
 
 ## Where it lives
 

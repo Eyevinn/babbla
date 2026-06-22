@@ -1,7 +1,7 @@
 # Spec: Onboarding gate for unsubscribed DMs + multi-project follow
 
 **Date:** 2026-06-22
-**Status:** Proposed
+**Status:** Implemented (merged to main 2026-06-22)
 **Scope:** Two independent changes to the DM subscription flow.
 
 ## Context

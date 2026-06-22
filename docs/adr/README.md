@@ -37,6 +37,7 @@ Format is lightweight [Nygard-style](https://cognitect.com/blog/2011/11/15/docum
 | [0015](0015-skilled-answer-path.md) | Skilled answer path — bounded read-only loosening for artifacts | Accepted |
 | [0016](0016-remove-agentmemory.md) | Remove agentmemory entirely — the repo is the only source of "why" | Accepted |
 | [0017](0017-private-personal-subscriptions-on-membership.md) | Personal subscriptions may cover private projects, gated on live channel membership | Accepted |
+| [0018](0018-onboarding-gate-for-unsubscribed-dms.md) | Unsubscribed DM askers are redirected to follow a project, not answered; follow/unfollow accept multiple comma-delimited projects | Accepted |
 
 ADRs 0001–0008 were decided on 2026-06-18 and written from the design proposal
 ([`../PROPOSAL-design.md`](../PROPOSAL-design.md)). ADRs 0009–0010 capture the
@@ -52,4 +53,7 @@ in production and added read-only surface area, so the repo is now the *only* so
 "why" Babbla reads. ADR 0017 refines 0007 (2026-06-22): personal subscriptions may now
 cover private projects too, gated on a live check that the user is a member of the
 project's private channel — honoring "access = Slack membership" on the DM/digest
-surfaces instead of blanket-denying them.
+surfaces instead of blanket-denying them. ADR 0018 builds on 0017 (2026-06-22):
+an unsubscribed DM asker is redirected to follow a project first (no Q&A answer
+against the default DM binding), and follow/unfollow accept multiple
+comma-delimited projects in one message.
