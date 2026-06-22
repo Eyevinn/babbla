@@ -101,6 +101,27 @@ private channels (`groups:read`).
   same written personal config as today ([0006](0006-stateful-config.md)); the
   record's *existence* is per-user and not exposed to others.
 
+## Amendment (2026-06-22): membership-aware advertising in DMs
+
+The original decision made *access* membership-aware (subscribe / ask / digest) but
+left the **advertise** surfaces open-tier only. That created an asymmetry: a member
+could follow a private project, yet the DM "projects you can follow" lists never told
+them so. The DM advertise lists — the onboarding gate and the unknown-project hints —
+now reuse the same `authorize_personal` decision (`Orchestrator._followable_for`), so a
+verified channel member sees their private projects listed there too, and the advertised
+set always equals the subscribe-accepted set.
+
+- **Lobby is unchanged.** Its discovery list posts one message to a shared channel with
+  no per-viewer identity, so it cannot be membership-filtered; private projects stay
+  hidden there (0007 points-don't-reveal). Private discoverability happens **only in a
+  1:1 DM, only for a member** — the one surface where the asker is known.
+- **"No private-name leakage" is refined, not reversed:** still no leakage to
+  *non-members* (they never produce a positive membership check); a member already has
+  access and now simply sees the names of projects they may follow.
+- **Cost:** the open-tier-only short-circuit is preserved; private bindings trigger a
+  membership lookup, run concurrently for the advertise lists.
+- See [spec](../superpowers/specs/2026-06-22-membership-aware-followable-list-design.md).
+
 ## Links
 
 - Refines: [0007](0007-access-visibility-redaction.md) — access = Slack membership;

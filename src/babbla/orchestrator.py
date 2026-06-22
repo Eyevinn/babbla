@@ -63,6 +63,18 @@ class Orchestrator:
         member = await self._membership(user_id, binding.channel_id)
         return authorize_personal(binding, is_member=member)
 
+    async def _followable_for(self, user_id: str) -> list[str]:
+        """Names this user may follow: open-tier always, private only when the
+        user is a verified channel member. Delegates to the same
+        `_authorize_personal` decision the subscribe/ask paths use, so the
+        advertised set always matches what `follow` will accept. Open-tier
+        short-circuits call-free; private lookups run concurrently."""
+        bindings = self._config.bindings
+        decisions = await asyncio.gather(
+            *(self._authorize_personal(user_id, b) for b in bindings)
+        )
+        return [b.name for b, d in zip(bindings, decisions) if d.allowed]
+
     async def handle_command(self, user_id: str, text: str) -> str:
         return await self._dispatch_command(user_id, personal.parse_command(text))
 
@@ -83,7 +95,7 @@ class Orchestrator:
             binding = next((b for b in self._config.bindings if b.name == cmd.project), None)
             if binding is None:
                 return personal.render_unknown_project(
-                    [b.name for b in self._config.bindings if is_open_tier(b)]
+                    await self._followable_for(user_id)
                 )
             decision = await self._authorize_personal(user_id, binding)
             if not decision.allowed:
@@ -103,9 +115,10 @@ class Orchestrator:
             name = cmd.projects[0] if cmd.projects else cmd.arg
             binding = next((b for b in self._config.bindings if b.name == name), None)
             if binding is None:
-                # Advertise only open-tier projects — never name a private one.
+                # Advertise the projects this user may follow — open-tier always,
+                # plus any private project they are a verified channel member of.
                 return personal.render_unknown_project(
-                    [b.name for b in self._config.bindings if is_open_tier(b)]
+                    await self._followable_for(user_id)
                 )
             decision = await self._authorize_personal(user_id, binding)
             if not decision.allowed:
@@ -178,7 +191,7 @@ class Orchestrator:
             if not names:
                 # Onboarding gate: an unsubscribed DM user is redirected to follow
                 # a project first — no agent run, no default-binding Q&A.
-                followable = [b.name for b in self._config.bindings if is_open_tier(b)]
+                followable = await self._followable_for(user_id)
                 return CitedAnswer(text=personal.render_no_subscriptions(followable), session_id=None)
             if self._catalog:
                 entries = subscriptions.entries_for(self._catalog, names)
