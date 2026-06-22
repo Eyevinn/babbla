@@ -3,6 +3,7 @@ import logging
 import pytest
 
 from babbla.app import build_orchestrator, load_secrets, run_preflight
+from babbla.membership import deny_membership
 from babbla.orchestrator import Orchestrator
 
 ENV = {
@@ -347,3 +348,16 @@ def test_load_secrets_backcompat_babbla_model():
     assert s.ask.model == "claude-sonnet-4-6"
     assert s.classifier.model == "claude-sonnet-4-6"
     assert s.ask.effort is None                      # inert by default
+
+
+def test_build_orchestrator_without_client_uses_deny_default(tmp_path):
+    # With no Slack client, private stays locked: the orchestrator's oracle is deny_membership.
+    cfg = tmp_path / "channels.yaml"
+    cfg.write_text(
+        "projects:\n  - name: MyTV\n    owner: Wkkkkk\n    repo: MyTV\n"
+        "    visibility: public\n    channel_id: C123\n    dm: true\n"
+    )
+    orch = build_orchestrator(
+        config_path=str(cfg), db_path=str(tmp_path / "s.db"), secrets=load_secrets(ENV)
+    )
+    assert orch._membership is deny_membership

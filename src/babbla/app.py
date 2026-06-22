@@ -10,6 +10,7 @@ from claude_agent_sdk import query as _sdk_query
 from slack_sdk.web.async_client import AsyncWebClient  # noqa: F401  (type only; client comes from AsyncApp)
 
 from babbla.agent_runner import AgentRunner, Secrets
+from babbla.membership import deny_membership, make_membership
 from babbla.config import load_config
 from babbla.doctor import check_access, check_skills
 from babbla.digest.actions import (
@@ -53,18 +54,19 @@ def load_secrets(env: Mapping[str, str]) -> Secrets:
     )
 
 
-def build_orchestrator(*, config_path: str, db_path: str, secrets: Secrets, get_json=None) -> Orchestrator:
+def build_orchestrator(*, config_path: str, db_path: str, secrets: Secrets, get_json=None, client=None) -> Orchestrator:
     config = load_config(config_path)
     runner = AgentRunner(secrets)
     store = SessionStore(db_path)
     personal_store = PersonalSubStore(db_path)
     default_cadence = config.personal_digest.default_cadence if config.personal_digest else "weekly"
     intent_fn = make_intent_fn(_sdk_query, secrets.classifier)
+    membership = make_membership(client) if client is not None else deny_membership
     if config.lobby_channel_id is None and config.personal_digest is None:
         return Orchestrator(
             config, runner, store,
             personal_store=personal_store, personal_default_cadence=default_cadence,
-            intent_fn=intent_fn,
+            intent_fn=intent_fn, membership=membership,
         )
     reader = get_json or make_get_json(secrets.github_token)
     catalog = build_catalog([b for b in config.bindings], reader)
@@ -76,6 +78,7 @@ def build_orchestrator(*, config_path: str, db_path: str, secrets: Secrets, get_
         personal_store=personal_store,
         personal_default_cadence=default_cadence,
         intent_fn=intent_fn,
+        membership=membership,
     )
 
 
@@ -111,10 +114,12 @@ def build_scheduler(*, config, secrets: Secrets, db_path: str, client) -> Action
     if config.personal_digest is not None:
         personal_store = PersonalSubStore(db_path)
         personal_state = PersonalDigestStateStore(db_path)
+        membership = make_membership(client)
         actions.append(
             PersonalDigestAction(
                 personal_store, personal_state, by_name, get_json, digest_runner, poster,
                 config.personal_digest.default_cadence, config.personal_digest.tz,
+                membership=membership,
             )
         )
     return ActionScheduler(actions=tuple(actions), now_fn=_utcnow)
@@ -170,9 +175,10 @@ async def main() -> None:
     config = load_config(config_path)
     run_preflight(config, get_json=make_get_json(secrets.github_token))
     run_skills_preflight(config, skills_pool=secrets.skills_pool)
-    orchestrator = build_orchestrator(config_path=config_path, db_path=db_path, secrets=secrets)
-
     app = AsyncApp(token=os.environ["SLACK_BOT_TOKEN"])
+    orchestrator = build_orchestrator(
+        config_path=config_path, db_path=db_path, secrets=secrets, client=app.client
+    )
     answer_store = AnswerStore(db_path)
     register_handlers(
         app, orchestrator, lobby_channel_id=config.lobby_channel_id, answer_store=answer_store,
