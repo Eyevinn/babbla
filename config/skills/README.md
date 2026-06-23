@@ -16,3 +16,12 @@ A skill is admissible only if **all** hold:
 Each skill is a folder `<name>/SKILL.md` (+ optional bundled resources), in the
 standard Claude Code skill format. The folder name is the value used in
 `skills:`.
+
+## Pool
+
+| Skill | What it produces |
+|---|---|
+| `architecture-diagram` | Self-contained HTML+SVG architecture diagram of the repo |
+| `onboarding-guide` | Self-contained HTML new-contributor onboarding guide |
+| `change-impact` | Self-contained HTML impact report for a proposed change — which files it touches and which ADRs it relates to |
+| `project-status` | Markdown project status snapshot from GitHub Issues — open issues grouped by milestone and label, recommended next action |

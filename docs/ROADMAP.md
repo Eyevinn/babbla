@@ -169,7 +169,7 @@ independent slices, each with its own spec→plan→build cycle; all built and m
 - [x] **Babbla-controlled pool, never the subject repo.** Skills load only from `config/skills/`
   (vetted, read-only) via the SDK's `ClaudeAgentOptions.skills=[names]`, staged into
   `<scratch>/.claude/skills/` with `setting_sources=["project"]` so no Babbla-repo or user-global
-  context leaks. Seeded with `architecture-diagram` + `onboarding-guide`.
+  context leaks. Pool: `architecture-diagram`, `onboarding-guide`, `change-impact`, `project-status`.
 - [x] **Artifacts back to Slack.** Generated files upload threaded under the answer (needs the
   Slack `files:write` scope; missing it degrades to a logged no-op, never a failed ask).
 - [x] **Resume-safe + Docker-portable + preflighted.** The scratch path is stable per thread (not
