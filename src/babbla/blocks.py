@@ -13,6 +13,7 @@ def _normalize_code_fences(text: str) -> str:
     # If ``` is not at the start of a line, prepend a newline.
     text = re.sub(r"([^\n])```", r"\1\n```", text)
     return text
+
 _SECTION_LIMIT = 3000  # Slack section block text hard cap
 _MAX_BLOCKS = 50       # Slack hard cap on blocks per message
 _TEXT_FALLBACK_LIMIT = 3000  # keep the chat.update `text` field well under Slack's 40k cap
