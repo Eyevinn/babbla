@@ -70,23 +70,25 @@ async def test_adapter_uploads_artifacts_threaded():
 
     class FakeClient:
         def __init__(self):
-            self.uploads = []
+            self.posts = []
             self.updated = []
         async def chat_postMessage(self, **kwargs):
-            return {"ts": "ph1"}
+            self.posts.append(kwargs)
+            return {"ts": f"msg{len(self.posts)}"}
         async def chat_update(self, **kwargs):
             self.updated.append(kwargs)
-        async def files_upload_v2(self, **kwargs):
-            self.uploads.append(kwargs)
-            return {"ok": True}
 
     client = FakeClient()
     await slack_adapter.process_ask(
         text="draw", channel="C1", thread_ts="t1", is_dm=False,
         client=client, orchestrator=FakeOrch(), user_id="U1",
     )
-    assert client.uploads and client.uploads[0]["filename"] == "architecture.html"
-    assert client.uploads[0]["thread_ts"] == "t1"
+    # First post is the placeholder; second is the artifact message.
+    assert len(client.posts) == 2
+    artifact_post = client.posts[1]
+    assert artifact_post["thread_ts"] == "t1"
+    assert "architecture.html" in artifact_post["text"]
+    assert "<svg/>" in artifact_post["text"]
 
 
 async def test_adapter_artifact_upload_failure_does_not_crash():
@@ -98,14 +100,17 @@ async def test_adapter_artifact_upload_failure_does_not_crash():
                                artifacts=(Artifact("x.md", b"y"),))
 
     class FlakyClient:
+        def __init__(self):
+            self._calls = 0
         async def chat_postMessage(self, **kwargs):
+            self._calls += 1
+            if self._calls > 1:
+                raise RuntimeError("transient failure")
             return {"ts": "ph1"}
         async def chat_update(self, **kwargs):
             pass
-        async def files_upload_v2(self, **kwargs):
-            raise RuntimeError("no scope")
 
-    # Must not raise.
+    # Must not raise even when the artifact post fails.
     await slack_adapter.process_ask(
         text="q", channel="C1", thread_ts="t1", is_dm=False,
         client=FlakyClient(), orchestrator=FakeOrch(), user_id="U1",

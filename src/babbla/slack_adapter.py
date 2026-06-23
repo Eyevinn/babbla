@@ -7,7 +7,6 @@ import re
 from slack_sdk.errors import SlackApiError
 
 from babbla.blocks import DELETE_ACTION_ID, delete_button_blocks, notification_text
-from babbla.digest.poster import SlackPoster
 from babbla.orchestrator import Orchestrator
 
 logger = logging.getLogger(__name__)
@@ -55,14 +54,21 @@ def _delete_owner(body: dict) -> str:
     return actions[0].get("value") or ""
 
 
-async def _upload_artifacts(client, *, channel: str, thread_ts: str, artifacts) -> None:
+async def _upload_artifacts(client, *, channel: str, thread_ts: str, artifacts, user_id: str = "") -> None:
     if not artifacts:
         return
-    poster = SlackPoster(client)
     for art in artifacts:
-        await poster.upload_file(
-            channel, filename=art.filename, content=art.data, thread_ts=thread_ts
-        )
+        try:
+            content = art.data.decode("utf-8", errors="replace") if isinstance(art.data, bytes) else (art.data or "")
+            text = f"📎 *{art.filename}*\n```\n{content}\n```"
+            await client.chat_postMessage(
+                channel=channel,
+                thread_ts=thread_ts,
+                text=notification_text(text),
+                blocks=delete_button_blocks(text, owner_id=user_id),
+            )
+        except Exception:
+            logger.exception("artifact post failed: %s -> %s", art.filename, channel)
 
 
 async def process_ask(
@@ -95,7 +101,7 @@ async def process_ask(
         )
         await _upload_artifacts(
             client, channel=channel, thread_ts=thread_ts,
-            artifacts=getattr(answer, "artifacts", ()),
+            artifacts=getattr(answer, "artifacts", ()), user_id=user_id or "",
         )
     except Exception:  # one failed Ask must never crash the process
         logger.exception("Ask failed for thread %s in channel %s", thread_ts, channel)
@@ -120,7 +126,7 @@ async def process_lobby_ask(
         )
         await _upload_artifacts(
             client, channel=channel, thread_ts=thread_ts,
-            artifacts=getattr(answer, "artifacts", ()),
+            artifacts=getattr(answer, "artifacts", ()), user_id=user_id or "",
         )
     except Exception:  # one failed Lobby ask must never crash the process
         logger.exception("Lobby ask failed for thread %s in channel %s", thread_ts, channel)
