@@ -87,9 +87,9 @@ oldest open bug and blocks the v1.2 milestone.").
 5. Write `project-status.md` to the current working directory using the four
    sections above. Use standard Markdown: `##` headings, `-` bullets, inline
    links for issue/PR titles.
-6. Reply with a 2–3 sentence summary (what's actively in progress, how many
-   open issues, what the recommended action is). Do not paste the Markdown into
-   the reply.
+6. Reply with a 2–3 sentence summary (how many open issues exist — milestoned
+   vs ungrouped — and what the recommended next action is). Do not paste the
+   Markdown into the reply.
 
 ---
 
