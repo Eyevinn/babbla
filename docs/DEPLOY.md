@@ -42,7 +42,7 @@ it are unchanged. Each tier can then be tuned independently with four optional k
 BABBLA_ASK_MODEL=...            # overrides BABBLA_MODEL for the Ask tier
 BABBLA_ASK_EFFORT=high          # low|medium|high|xhigh|max
 BABBLA_ASK_FALLBACK_MODEL=...
-BABBLA_ASK_MAX_TURNS=8
+BABBLA_ASK_MAX_TURNS=16
 BABBLA_ASK_MAX_BUDGET_USD=2.0
 
 BABBLA_CLASSIFIER_MODEL=...     # overrides BABBLA_MODEL for the Classifier tier
