@@ -3,24 +3,22 @@
 # where anyone can ask without naming a project; Babbla routes the question to the
 # right project, answers public/internal, and points to private projects' channels.
 # null = no lobby (the lobby path is inert).
-lobby_channel_id: null
+lobby_channel_id: C0BBU8W3ERL  # #itv-lobby
 projects:
   - name: MyTV
     owner: Wkkkkk
     repo: MyTV
     visibility: public
     # Slack channel id for the Shared Ask surface. Fill in once the channel exists;
-    # null means "no channel binding yet" (DM still works via dm: true).
-    channel_id: null  # set to your Slack channel id
-    # Answer DMs (Private Ask) about this project. Exactly one project may set dm: true in the pilot.
-    dm: true
-    # Opt into vetted read-only skills from config/skills/ (default: none).
-    # Each name must be a folder config/skills/<name>/SKILL.md. When set, the
-    # answering agent may invoke these skills and Babbla uploads any artifact
-    # they produce back to the asking surface. Requires the bot's files:write
-    # scope (see DEPLOY.md).
-    # skills:
-    #   - architecture-diagram
+    # null means "no channel binding yet" (DM about MyTV works by following it).
+    channel_id: C0BBK6SJTND
+    # DM fallback (dm: true) now lives on Babbla. MyTV is DM-answerable by following it.
+    dm: false
+    # Opt-in read-only skills from config/skills/ (see config/skills/README.md).
+    skills:
+      - architecture-diagram
+      - onboarding-guide
+      - change-impact
     # Phase 3 digest: a weekly "what shipped" summary of new commits on the default branch,
     # posted to channel_id above. anchor: branch (MyTV deploys manually off-GitHub).
     digest:
@@ -34,6 +32,92 @@ projects:
       #   description: "auth, secrets, access control, CVEs, dependency security bumps"
       #   labels: [security, area/auth]      # optional: PRs with any of these labels are in-topic (✓ must-include)
       #   paths: ["src/babbla/access.py", "src/babbla/**"]   # optional: changed-file globs, repo-relative
+    stale_prs:
+      cadence: weekly
+      tz: Europe/Stockholm
+      threshold_days: 14
+      include_drafts: false
+    adr:
+      cadence: weekly
+      tz: Europe/Stockholm
+      dir: docs/adr           # reads docs/adr in Wkkkkk/MyTV; stays quiet if absent
+  # Second project — added to exercise the Lobby (routing needs >= 2 projects).
+  # Public. Holds the single dm: true — it is the DM fallback for users who follow
+  # nothing (a drive-by DM question is answered about the Babbla bot itself).
+  - name: Babbla
+    owner: Eyevinn
+    repo: babbla
+    visibility: public
+    channel_id: C0BBWG4U6FL
+    dm: true
+    skills:
+      - architecture-diagram
+      - onboarding-guide
+      - change-impact
+    digest:
+      cadence: weekly
+      tz: Europe/Stockholm
+      anchor: branch
+    stale_prs:
+      cadence: weekly
+      tz: Europe/Stockholm
+      threshold_days: 14
+      include_drafts: false
+    adr:
+      cadence: weekly
+      tz: Europe/Stockholm
+      dir: docs/adr
+  # Third project — PRIVATE, fully onboarded (2026-06-22). The fine-grained token
+  # is granted read on this repo (Contents/Metadata/PRs/Issues), so Babbla answers
+  # with cited content ON ITS OWN CHANNEL, where membership IS the access boundary
+  # (access.py). Everywhere else (DM, Lobby) it is points-don't-reveal: routes ->
+  # authorize_ask denies -> a "🔒 private" pointer to this channel, no repo content.
+  # Excluded from the public discovery list. ADR 0014 covers the private-repo grant.
+  - name: Agentic Engineering Kit
+    owner: Eyevinn
+    repo: agentic-engineering-kit
+    visibility: private
+    channel_id: C0BC30EPX7F
+    skills:
+      - architecture-diagram
+      - onboarding-guide
+      - change-impact
+    digest:
+      cadence: weekly
+      tz: Europe/Stockholm
+      anchor: branch
+    stale_prs:
+      cadence: weekly
+      tz: Europe/Stockholm
+      threshold_days: 14
+      include_drafts: false
+    adr:
+      cadence: weekly
+      tz: Europe/Stockholm
+      dir: docs/adr
+  - name: superpowers
+    owner: obra
+    repo: superpowers
+    visibility: public
+    channel_id: C0BCJCLJEPK
+    dm: false
+    skills:
+      - architecture-diagram
+      - onboarding-guide
+      - change-impact
+    digest:
+      cadence: weekly
+      tz: Europe/Stockholm
+      anchor: branch
+    stale_prs:
+      cadence: weekly
+      tz: Europe/Stockholm
+      threshold_days: 14
+      include_drafts: false
+    adr:
+      cadence: weekly
+      tz: Europe/Stockholm
+      dir: docs/adr
 # Scheduled actions (optional). Beyond a project's own `digest:` above, you can
 # give a PROJECT a weekly read-only quiz posted to its channel (answers in a thread):
 #      quiz:
@@ -56,6 +140,6 @@ projects:
 # in plain language (e.g. "make my digest weekly"; default applies until they choose).
 # Subscription management ("follow MyTV", "what am I following?") works even without
 # this block; personal DM-ask routing and the digest require it.
-# personal_digest:
-#   default_cadence: weekly   # daily | weekly
-#   tz: Europe/Stockholm
+personal_digest:
+  default_cadence: weekly   # daily | weekly
+  tz: Europe/Stockholm

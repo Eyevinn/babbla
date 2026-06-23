@@ -1,6 +1,18 @@
 from __future__ import annotations
 
+import re
+
 DELETE_ACTION_ID = "babbla_delete_message"
+
+def _normalize_code_fences(text: str) -> str:
+    """Prepare code fences for Slack mrkdwn:
+    1. Strip language identifiers (```bash → ```) anywhere they appear.
+    2. Ensure every ``` is on its own line — Slack requires it to render as a block.
+    """
+    text = re.sub(r"```\w+", "```", text)
+    # If ``` is not at the start of a line, prepend a newline.
+    text = re.sub(r"([^\n])```", r"\1\n```", text)
+    return text
 _SECTION_LIMIT = 3000  # Slack section block text hard cap
 _MAX_BLOCKS = 50       # Slack hard cap on blocks per message
 _TEXT_FALLBACK_LIMIT = 3000  # keep the chat.update `text` field well under Slack's 40k cap
@@ -49,7 +61,7 @@ def delete_button_blocks(text: str, owner_id: str = "") -> list[dict]:
     The button's value carries owner_id: when set, only that user may delete (the
     handler enforces it); empty means anyone who sees it may delete.
     """
-    chunks = _chunk(text)
+    chunks = _chunk(_normalize_code_fences(text))
     # Slack rejects messages with more than 50 blocks. Reserve one for the
     # actions (button) block and, when content overflows, one for a truncation
     # note, so the message always posts rather than failing wholesale.
