@@ -62,6 +62,8 @@ async def test_upload_file_degrades_on_failure():
 
 async def test_adapter_uploads_artifacts_threaded():
     from babbla import slack_adapter
+    from babbla.session_store import AnswerStore
+    import tempfile, os
 
     class FakeOrch:
         async def handle_ask(self, **kwargs):
@@ -71,24 +73,40 @@ async def test_adapter_uploads_artifacts_threaded():
     class FakeClient:
         def __init__(self):
             self.posts = []
+            self.uploads = []
             self.updated = []
         async def chat_postMessage(self, **kwargs):
             self.posts.append(kwargs)
             return {"ts": f"msg{len(self.posts)}"}
         async def chat_update(self, **kwargs):
             self.updated.append(kwargs)
+        async def files_upload_v2(self, **kwargs):
+            self.uploads.append(kwargs)
+            return {"files": [{"id": "F_ARCH"}]}
 
-    client = FakeClient()
-    await slack_adapter.process_ask(
-        text="draw", channel="C1", thread_ts="t1", is_dm=False,
-        client=client, orchestrator=FakeOrch(), user_id="U1",
-    )
-    # First post is the placeholder; second is the artifact message.
-    assert len(client.posts) == 2
-    artifact_post = client.posts[1]
-    assert artifact_post["thread_ts"] == "t1"
-    assert "architecture.html" in artifact_post["text"]
-    assert "<svg/>" in artifact_post["text"]
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        db = f.name
+    try:
+        client = FakeClient()
+        store = AnswerStore(db)
+        await slack_adapter.process_ask(
+            text="draw", channel="C1", thread_ts="t1", is_dm=False,
+            client=client, orchestrator=FakeOrch(), user_id="U1",
+            answer_store=store,
+        )
+        # File is uploaded.
+        assert len(client.uploads) == 1
+        assert client.uploads[0]["filename"] == "architecture.html"
+        # Summary is updated with file ID encoded in button value.
+        update = client.updated[0]
+        button = [e for b in update["blocks"] if b["type"] == "actions"
+                  for e in b["elements"]][0]
+        assert button["value"] == "U1:F_ARCH"
+        # File ID is tracked for orphan cleanup.
+        entries = await store.pop("C1", "t1")
+        assert "F_ARCH" in entries
+    finally:
+        os.unlink(db)
 
 
 async def test_adapter_artifact_upload_failure_does_not_crash():
@@ -100,15 +118,12 @@ async def test_adapter_artifact_upload_failure_does_not_crash():
                                artifacts=(Artifact("x.md", b"y"),))
 
     class FlakyClient:
-        def __init__(self):
-            self._calls = 0
         async def chat_postMessage(self, **kwargs):
-            self._calls += 1
-            if self._calls > 1:
-                raise RuntimeError("transient failure")
             return {"ts": "ph1"}
         async def chat_update(self, **kwargs):
             pass
+        async def files_upload_v2(self, **kwargs):
+            raise RuntimeError("transient failure")
 
     # Must not raise even when the artifact post fails.
     await slack_adapter.process_ask(

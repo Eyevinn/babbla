@@ -1,4 +1,4 @@
-from babbla.blocks import DELETE_ACTION_ID, delete_button_blocks, notification_text
+from babbla.blocks import DELETE_ACTION_ID, _md_to_mrkdwn, delete_button_blocks, notification_text
 
 
 def _button(blocks):
@@ -53,6 +53,36 @@ def test_delete_button_blocks_caps_block_count_for_huge_text():
     assert len(blocks) <= 50
     assert blocks[-1]["type"] == "actions"            # button survives the cap
     assert all(len(b["text"]["text"]) <= 3000 for b in blocks if b["type"] == "section")
+
+
+def test_md_to_mrkdwn_headings():
+    assert _md_to_mrkdwn("# Title") == "*Title*"
+    assert _md_to_mrkdwn("## Sub") == "*Sub*"
+    assert _md_to_mrkdwn("### Deep") == "*Deep*"
+
+
+def test_md_to_mrkdwn_bold():
+    assert _md_to_mrkdwn("**bold**") == "*bold*"
+    assert _md_to_mrkdwn("__bold__") == "*bold*"
+
+
+def test_md_to_mrkdwn_strikethrough():
+    assert _md_to_mrkdwn("~~gone~~") == "~gone~"
+
+
+def test_md_to_mrkdwn_links():
+    assert _md_to_mrkdwn("[text](https://example.com)") == "<https://example.com|text>"
+
+
+def test_md_to_mrkdwn_preserves_code_fences():
+    # Content inside ``` fences must not be transformed.
+    src = "```\n**not bold**\n# not heading\n```"
+    assert _md_to_mrkdwn(src) == src
+
+
+
+def test_md_to_mrkdwn_plain_text_unchanged():
+    assert _md_to_mrkdwn("Because PR #58") == "Because PR #58"
 
 
 def test_notification_text_short_unchanged_long_truncated():

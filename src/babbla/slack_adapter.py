@@ -49,26 +49,47 @@ def _delete_target(body: dict) -> tuple[str | None, str | None]:
 
 
 def _delete_owner(body: dict) -> str:
-    """The owner id the button carries in its value ("" = anyone may delete)."""
+    """The owner id from the button value (part before ':', or the whole value).
+
+    Button values are either "owner_id" (plain delete) or "owner_id:file_ts"
+    (delete + file message). Both shapes use ':' as a separator.
+    """
     actions = body.get("actions") or [{}]
-    return actions[0].get("value") or ""
+    value = actions[0].get("value") or ""
+    return value.split(":", 1)[0]
 
 
-async def _upload_artifacts(client, *, channel: str, thread_ts: str, artifacts, user_id: str = "") -> None:
+def _delete_file_id(body: dict) -> str | None:
+    """The file ID encoded after ':' in the button value, or None."""
+    actions = body.get("actions") or [{}]
+    value = actions[0].get("value") or ""
+    parts = value.split(":", 1)
+    return parts[1] if len(parts) > 1 and parts[1] else None
+
+
+async def _upload_artifacts(client, *, channel: str, thread_ts: str, artifacts, user_id: str = "") -> list[str]:
+    """Upload artifacts as Slack files. Returns the Slack file ID of each uploaded file."""
+    file_ids: list[str] = []
     if not artifacts:
-        return
+        return file_ids
     for art in artifacts:
         try:
             content = art.data.decode("utf-8", errors="replace") if isinstance(art.data, bytes) else (art.data or "")
-            text = f"📎 *{art.filename}*\n```\n{content}\n```"
-            await client.chat_postMessage(
+            resp = await client.files_upload_v2(
                 channel=channel,
                 thread_ts=thread_ts,
-                text=notification_text(text),
-                blocks=delete_button_blocks(text, owner_id=user_id),
+                filename=art.filename,
+                content=content,
+                title=art.filename,
             )
+            resp_files = (resp or {}).get("files")
+            resp_file = (resp or {}).get("file")
+            file_id = (resp_files or [{}])[0].get("id") if resp_files else (resp_file or {}).get("id")
+            if file_id:
+                file_ids.append(file_id)
         except Exception:
             logger.exception("artifact post failed: %s -> %s", art.filename, channel)
+    return file_ids
 
 
 async def process_ask(
@@ -95,13 +116,20 @@ async def process_ask(
         answer = await orchestrator.handle_ask(
             text=text, thread_ts=thread_ts, channel_id=channel, is_dm=is_dm, user_id=user_id
         )
-        await client.chat_update(
-            channel=channel, ts=ts, text=notification_text(answer.text),
-            blocks=delete_button_blocks(answer.text, owner_id=user_id or ""),
-        )
-        await _upload_artifacts(
+        file_ids = await _upload_artifacts(
             client, channel=channel, thread_ts=thread_ts,
             artifacts=getattr(answer, "artifacts", ()), user_id=user_id or "",
+        )
+        if answer_store is not None:
+            for fid in file_ids:
+                await answer_store.record(channel, thread_ts, fid)
+        # Encode the first file ID in the delete button so clicking it also removes
+        # the uploaded file. Format: "owner_id:file_id" or plain "owner_id" if no file.
+        file_id = file_ids[0] if file_ids else None
+        button_value = f"{user_id or ''}:{file_id}" if file_id else (user_id or "")
+        await client.chat_update(
+            channel=channel, ts=ts, text=notification_text(answer.text),
+            blocks=delete_button_blocks(answer.text, owner_id=button_value),
         )
     except Exception:  # one failed Ask must never crash the process
         logger.exception("Ask failed for thread %s in channel %s", thread_ts, channel)
@@ -120,13 +148,18 @@ async def process_lobby_ask(
         await answer_store.record(channel, thread_ts, ts)
     try:
         answer = await orchestrator.handle_lobby_ask(text=text, thread_ts=thread_ts)
-        await client.chat_update(
-            channel=channel, ts=ts, text=notification_text(answer.text),
-            blocks=delete_button_blocks(answer.text, owner_id=user_id or ""),
-        )
-        await _upload_artifacts(
+        file_ids = await _upload_artifacts(
             client, channel=channel, thread_ts=thread_ts,
             artifacts=getattr(answer, "artifacts", ()), user_id=user_id or "",
+        )
+        if answer_store is not None:
+            for fid in file_ids:
+                await answer_store.record(channel, thread_ts, fid)
+        file_id = file_ids[0] if file_ids else None
+        button_value = f"{user_id or ''}:{file_id}" if file_id else (user_id or "")
+        await client.chat_update(
+            channel=channel, ts=ts, text=notification_text(answer.text),
+            blocks=delete_button_blocks(answer.text, owner_id=button_value),
         )
     except Exception:  # one failed Lobby ask must never crash the process
         logger.exception("Lobby ask failed for thread %s in channel %s", thread_ts, channel)
@@ -181,15 +214,20 @@ def register_handlers(
         # deletions — including the deletion events our own chat.delete emits.
         if answer_store is None or not (channel and parent_ts):
             return
-        for ts in await answer_store.pop(channel, parent_ts):
+        for entry in await answer_store.pop(channel, parent_ts):
             try:
-                await client.chat_delete(channel=channel, ts=ts)
+                if entry.startswith("F"):
+                    # Stored entry is a Slack file ID — delete the file itself.
+                    await client.files_delete(file=entry)
+                else:
+                    await client.chat_delete(channel=channel, ts=entry)
             except SlackApiError as e:
-                if (e.response or {}).get("error") == "message_not_found":
+                err = (e.response or {}).get("error")
+                if err in ("message_not_found", "file_not_found", "file_deleted"):
                     continue  # already gone — best-effort cleanup, nothing to do
-                logger.exception("orphan cleanup failed for %s/%s", channel, ts)
+                logger.exception("orphan cleanup failed for %s/%s", channel, entry)
             except Exception:
-                logger.exception("orphan cleanup failed for %s/%s", channel, ts)
+                logger.exception("orphan cleanup failed for %s/%s", channel, entry)
 
     @app.event("message")
     async def _on_message(event, client):
@@ -242,6 +280,17 @@ def register_handlers(
             except Exception:
                 logger.exception("ephemeral deny failed for %s/%s", channel, ts)
             return
+        # Delete any uploaded file whose ID is encoded in the button value.
+        file_id = _delete_file_id(body)
+        if file_id:
+            try:
+                await client.files_delete(file=file_id)
+            except SlackApiError as e:
+                err = (e.response or {}).get("error")
+                if err not in ("file_not_found", "file_deleted"):
+                    logger.exception("file delete failed for %s", file_id)
+            except Exception:
+                logger.exception("file delete failed for %s", file_id)
         try:
             await client.chat_delete(channel=channel, ts=ts)
         except Exception:

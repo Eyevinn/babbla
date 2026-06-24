@@ -4,6 +4,32 @@ import re
 
 DELETE_ACTION_ID = "babbla_delete_message"
 
+def _md_to_mrkdwn(text: str) -> str:
+    """Convert common Markdown constructs to Slack mrkdwn.
+
+    Only transforms outside code fences to avoid mangling code content.
+    """
+    # Split on code fences so we only transform prose segments.
+    fence_re = re.compile(r"(```.*?```)", re.DOTALL)
+    parts = fence_re.split(text)
+    out = []
+    for i, part in enumerate(parts):
+        if i % 2 == 1:  # inside a code fence — leave untouched
+            out.append(part)
+            continue
+        # Headings: # … → *…* (any level collapses to bold)
+        part = re.sub(r"^#{1,6}\s+(.+)$", r"*\1*", part, flags=re.MULTILINE)
+        # Bold: **text** or __text__ → *text*
+        part = re.sub(r"\*\*(.+?)\*\*", r"*\1*", part)
+        part = re.sub(r"__(.+?)__", r"*\1*", part)
+        # Strikethrough: ~~text~~ → ~text~
+        part = re.sub(r"~~(.+?)~~", r"~\1~", part)
+        # Links: [text](url) → <url|text>
+        part = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"<\2|\1>", part)
+        out.append(part)
+    return "".join(out)
+
+
 def _normalize_code_fences(text: str) -> str:
     """Prepare code fences for Slack mrkdwn:
     1. Strip language identifiers (```bash → ```) anywhere they appear.
@@ -62,7 +88,7 @@ def delete_button_blocks(text: str, owner_id: str = "") -> list[dict]:
     The button's value carries owner_id: when set, only that user may delete (the
     handler enforces it); empty means anyone who sees it may delete.
     """
-    chunks = _chunk(_normalize_code_fences(text))
+    chunks = _chunk(_normalize_code_fences(_md_to_mrkdwn(text)))
     # Slack rejects messages with more than 50 blocks. Reserve one for the
     # actions (button) block and, when content overflows, one for a truncation
     # note, so the message always posts rather than failing wholesale.

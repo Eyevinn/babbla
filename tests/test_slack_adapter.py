@@ -7,6 +7,7 @@ from babbla.blocks import DELETE_ACTION_ID
 from babbla.slack_adapter import (
     ERROR_TEXT,
     PLACEHOLDER,
+    _delete_file_id,
     _delete_owner,
     _delete_target,
     _is_lobby,
@@ -47,6 +48,13 @@ class FakeClient:
 
     async def chat_postEphemeral(self, *, channel, user, text):
         self.ephemeral = {"channel": channel, "user": user, "text": text}
+        return {"ok": True}
+
+    async def files_upload_v2(self, **kwargs):
+        return {"files": []}
+
+    async def files_delete(self, **kwargs):
+        self.deleted.append({"file": kwargs.get("file")})
         return {"ok": True}
 
 
@@ -442,6 +450,18 @@ def test_delete_owner_reads_button_value():
     assert _delete_owner({"actions": [{"value": "U7"}]}) == "U7"
     assert _delete_owner({"actions": [{"value": ""}]}) == ""
     assert _delete_owner({}) == ""
+    # Composite "owner:file_ts" — only the owner part is returned.
+    assert _delete_owner({"actions": [{"value": "U7:1234.567"}]}) == "U7"
+    assert _delete_owner({"actions": [{"value": ":1234.567"}]}) == ""
+
+
+def test_delete_file_id_parses_composite_value():
+    assert _delete_file_id({"actions": [{"value": "U7:F123ABC"}]}) == "F123ABC"
+    assert _delete_file_id({"actions": [{"value": ":F123ABC"}]}) == "F123ABC"
+    # Plain owner-only value → no file id.
+    assert _delete_file_id({"actions": [{"value": "U7"}]}) is None
+    assert _delete_file_id({"actions": [{"value": ""}]}) is None
+    assert _delete_file_id({}) is None
 
 
 def _delete_handler(app):
@@ -468,6 +488,20 @@ async def test_delete_handler_anyone_can_delete_when_no_owner():
             "user": {"id": "Ustranger"}, "actions": [{"value": ""}]}
     await _delete_handler(app)(ack=_ack, body=body, client=client)
     assert client.deleted == [{"channel": "C1", "ts": "m9"}]
+
+
+async def test_delete_handler_also_deletes_file():
+    app, client, orch = FakeApp(), FakeClient(), FakeOrch()
+    register_handlers(app, orch)
+    body = {"channel": {"id": "C1"}, "message": {"ts": "summary_ts"},
+            "user": {"id": "U7"}, "actions": [{"value": "U7:F_FILE99"}]}
+    await _delete_handler(app)(ack=_ack, body=body, client=client)
+    # File is deleted via files_delete (not chat_delete).
+    file_deleted = [d["file"] for d in client.deleted if "file" in d]
+    assert "F_FILE99" in file_deleted
+    # Summary message is still deleted via chat_delete.
+    msg_deleted = [d["ts"] for d in client.deleted if "ts" in d]
+    assert "summary_ts" in msg_deleted
 
 
 async def test_delete_handler_non_owner_is_refused():

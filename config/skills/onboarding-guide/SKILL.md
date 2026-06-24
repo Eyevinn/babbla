@@ -1,13 +1,13 @@
 ---
 name: onboarding-guide
-description: Produce a new-contributor onboarding guide for a project as a self-contained HTML file, using only read-only GitHub access. Use when asked to onboard someone, write a getting-started or contributor guide, or explain how to set up and start working on a repo.
+description: Produce a new-contributor onboarding guide for a project as a Markdown file, using only read-only GitHub access. Use when asked to onboard someone, write a getting-started or contributor guide, or explain how to set up and start working on a repo.
 ---
 
 # Onboarding guide (read-only)
 
-Produce a polished, self-contained HTML onboarding guide written into the
-current working directory — a single page a new contributor could read to go
-from zero to a first change.
+Produce a polished Markdown onboarding guide written into the current working
+directory — a single page a new contributor could read to go from zero to a
+first change.
 
 ## Steps
 
@@ -25,12 +25,11 @@ from zero to a first change.
    - **Test & checks** — the test/lint commands and any CI gates.
    - **Conventions & first change** — coding conventions (from CLAUDE.md/ADRs)
      and a concrete suggested first contribution.
-3. Write ONE file `onboarding.html` into the current working directory: an
-   inline `<style>` + content (no external assets, no network). Keep it
-   readable — headings, short paragraphs, and code blocks for commands.
+3. Write ONE file `onboarding.md` into the current working directory using
+   standard Markdown: `#` headings, short paragraphs, and fenced code blocks
+   for commands.
 4. Reply with a 2-3 sentence summary plus the suggested first change. Do not
-   paste the HTML into the reply.
+   paste the full guide into the reply.
 
 If a section's source is genuinely absent (e.g. no test command anywhere), say
-so in that section rather than guessing. Keep the file self-contained: all CSS
-inline, no remote fonts or images.
+so in that section rather than guessing.
