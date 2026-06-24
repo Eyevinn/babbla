@@ -24,9 +24,9 @@ In plain language, all inside Slack — no terminal required:
   Other scheduled nudges ride the same scheduler — a weekly **quiz**, stale-PR reminders, an
   ADR-of-the-week.
 - **Skills** — define any vetted, read-only **skill** for a project's use case. A skill replies
-  in chat and can *optionally* produce an output artifact that Babbla posts back into the thread
-  as a formatted block with a delete button — all without ever touching the subject repo. Seeded
-  with `architecture-diagram`, `onboarding-guide`, `change-impact`, and `project-status`.
+  in chat and can *optionally* produce an output artifact that Babbla uploads as a **file
+  attachment** in the thread with a 🗑 delete button — all without ever touching the subject repo.
+  Seeded with `architecture-diagram`, `onboarding-guide`, `change-impact`, and `project-status`.
 
 Real questions it answers: *"What shipped to production this week?"* · *"Why did we change X?"*
 · *"Is feature Y live yet, or still in preview?"*
@@ -143,9 +143,9 @@ commented block. Run `babbla-doctor` (or `python -m babbla.doctor`) to see the r
 Create an app at <https://api.slack.com/apps>, enable **Socket Mode**, then add:
 
 - **Bot token scopes:** `app_mentions:read`, `chat:write`, `im:history`, `im:write`,
-  `channels:history`, `groups:history`, `groups:read`, and `files:write` (`files:write` is
-  reserved for file uploads — skill artifacts now post as block messages via `chat_postMessage`;
-  the two `*:history` scopes back the channel events below;
+  `channels:history`, `groups:history`, `groups:read`, `files:write`, and `files:read`
+  (`files:write` uploads skill artifacts via `files_upload_v2`; `files:read` lets Babbla look
+  up file metadata; the two `*:history` scopes back the channel events below;
   `groups:read` lets Babbla verify private-channel membership so private projects can be followed
   in personal subscriptions — fail-closed, see [ADR 0017](docs/adr/0017-private-personal-subscriptions-on-membership.md)).
 - **Event subscriptions:** `app_mention`, `message.im`, `message.channels`, `message.groups`
