@@ -504,6 +504,42 @@ async def test_delete_handler_also_deletes_file():
     assert "summary_ts" in msg_deleted
 
 
+async def test_delete_handler_cleans_answer_store():
+    """Clicking 🗑 should remove the summary ts and file id from the store so
+    subsequent orphan cleanup doesn't re-attempt already-deleted resources."""
+    app, client, orch = FakeApp(), FakeClient(), FakeOrch()
+    store = FakeAnswerStore(mapping={("C1", "thread1"): ["summary_ts", "F_FILE99"]})
+    register_handlers(app, orch, answer_store=store)
+    body = {
+        "channel": {"id": "C1"},
+        "message": {"ts": "summary_ts", "thread_ts": "thread1"},
+        "user": {"id": "U7"},
+        "actions": [{"value": "U7:F_FILE99"}],
+    }
+    await _delete_handler(app)(ack=_ack, body=body, client=client)
+    # Both the summary ts and file id must be removed from the store.
+    assert ("C1", "thread1", "summary_ts") in store.removed
+    assert ("C1", "thread1", "F_FILE99") in store.removed
+    # Remaining store entry for any sibling answer is untouched.
+    assert store._mapping.get(("C1", "thread1"), []) == []
+
+
+async def test_delete_handler_store_cleanup_skipped_when_no_thread_ts():
+    """If the action payload lacks thread_ts (non-threaded DM), store cleanup is
+    a no-op — we cannot know the parent_ts to remove against."""
+    app, client, orch = FakeApp(), FakeClient(), FakeOrch()
+    store = FakeAnswerStore()
+    register_handlers(app, orch, answer_store=store)
+    body = {
+        "channel": {"id": "D1"},
+        "message": {"ts": "dm_ts"},   # no thread_ts
+        "user": {"id": "U7"},
+        "actions": [{"value": "U7"}],
+    }
+    await _delete_handler(app)(ack=_ack, body=body, client=client)
+    assert store.removed == []   # no crash, no spurious removes
+
+
 async def test_delete_handler_non_owner_is_refused():
     app, client, orch = FakeApp(), FakeClient(), FakeOrch()
     register_handlers(app, orch)
@@ -541,11 +577,20 @@ async def test_babbla_command_acks_and_responds():
 class FakeAnswerStore:
     def __init__(self, mapping=None):
         self.recorded = []
+        self.removed = []
         self._mapping = dict(mapping or {})
 
     async def record(self, channel_id, parent_ts, answer_ts):
         self.recorded.append((channel_id, parent_ts, answer_ts))
         self._mapping.setdefault((channel_id, parent_ts), []).append(answer_ts)
+
+    async def remove(self, channel_id, parent_ts, answer_ts):
+        self.removed.append((channel_id, parent_ts, answer_ts))
+        entries = self._mapping.get((channel_id, parent_ts), [])
+        try:
+            entries.remove(answer_ts)
+        except ValueError:
+            pass
 
     async def pop(self, channel_id, parent_ts):
         return tuple(self._mapping.pop((channel_id, parent_ts), []))

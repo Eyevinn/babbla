@@ -105,6 +105,17 @@ class AnswerStore:
         )
         self._conn.commit()
 
+    async def remove(self, channel_id: str, parent_ts: str, answer_ts: str) -> None:
+        """Remove a single specific entry without touching sibling answers."""
+        await asyncio.to_thread(self._remove_sync, channel_id, parent_ts, answer_ts)
+
+    def _remove_sync(self, channel_id: str, parent_ts: str, answer_ts: str) -> None:
+        self._conn.execute(
+            "DELETE FROM answer_messages WHERE channel_id = ? AND parent_ts = ? AND answer_ts = ?",
+            (channel_id, parent_ts, answer_ts),
+        )
+        self._conn.commit()
+
     async def pop(self, channel_id: str, parent_ts: str) -> tuple[str, ...]:
         """Return — and remove — every answer ts recorded for this question. Empty
         when nothing matches, so cleanup is a safe no-op on unrelated deletions

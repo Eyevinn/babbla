@@ -295,6 +295,15 @@ def register_handlers(
             await client.chat_delete(channel=channel, ts=ts)
         except Exception:
             logger.exception("delete button failed for %s/%s", channel, ts)
+        # Remove these specific entries from the store so orphan cleanup doesn't
+        # re-attempt already-deleted resources. Use targeted remove() (not pop())
+        # to avoid disturbing sibling answers in the same thread.
+        if answer_store is not None:
+            parent_ts = (body.get("message") or {}).get("thread_ts")
+            if parent_ts:
+                await answer_store.remove(channel, parent_ts, ts)
+                if file_id:
+                    await answer_store.remove(channel, parent_ts, file_id)
 
     @app.command("/babbla")
     async def _on_command(ack, command, respond):
