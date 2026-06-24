@@ -24,9 +24,9 @@ In plain language, all inside Slack — no terminal required:
   Other scheduled nudges ride the same scheduler — a weekly **quiz**, stale-PR reminders, an
   ADR-of-the-week.
 - **Skills** — define any vetted, read-only **skill** for a project's use case. A skill replies
-  in chat and can *optionally* produce an output file that Babbla posts back into the thread —
-  all without ever touching the subject repo. Seeded with `architecture-diagram` and
-  `onboarding-guide`.
+  in chat and can *optionally* produce an output artifact that Babbla posts back into the thread
+  as a formatted block with a delete button — all without ever touching the subject repo. Seeded
+  with `architecture-diagram`, `onboarding-guide`, `change-impact`, and `project-status`.
 
 Real questions it answers: *"What shipped to production this week?"* · *"Why did we change X?"*
 · *"Is feature Y live yet, or still in preview?"*
@@ -86,6 +86,7 @@ degradation). See [ADR 0009](docs/adr/0009-repo-is-source-of-truth-for-why.md) a
 | [`PROPOSAL-pitch.md`](docs/PROPOSAL-pitch.md) | The one-page pitch — problem, idea, and what's being asked. |
 | [`PROPOSAL-design.md`](docs/PROPOSAL-design.md) | The design and implementation plan. |
 | [`ROADMAP.md`](docs/ROADMAP.md) | Post-pilot direction and the phased plan from foundation to multi-project. |
+| [`REFLECTIONS.md`](docs/REFLECTIONS.md) | How Babbla compares to Claude Tag — what each approach bets on, what we'd add, and what we'd leave out. |
 | [`RECOMMENDATIONS.md`](docs/RECOMMENDATIONS.md) | Advisory "getting the most out of Babbla" guide for subject teams. |
 | [`ONBOARDING.md`](docs/ONBOARDING.md) | The repeatable runbook for binding the Nth project. |
 | [`DEPLOY.md`](docs/DEPLOY.md) | Server hosting (Eyevinn OSC) and the headless-auth story. |
@@ -142,8 +143,9 @@ commented block. Run `babbla-doctor` (or `python -m babbla.doctor`) to see the r
 Create an app at <https://api.slack.com/apps>, enable **Socket Mode**, then add:
 
 - **Bot token scopes:** `app_mentions:read`, `chat:write`, `im:history`, `im:write`,
-  `channels:history`, `groups:history`, `groups:read`, and `files:write` (`files:write` lets
-  Babbla post skill artifacts; the two `*:history` scopes back the channel events below;
+  `channels:history`, `groups:history`, `groups:read`, and `files:write` (`files:write` is
+  reserved for file uploads — skill artifacts now post as block messages via `chat_postMessage`;
+  the two `*:history` scopes back the channel events below;
   `groups:read` lets Babbla verify private-channel membership so private projects can be followed
   in personal subscriptions — fail-closed, see [ADR 0017](docs/adr/0017-private-personal-subscriptions-on-membership.md)).
 - **Event subscriptions:** `app_mention`, `message.im`, `message.channels`, `message.groups`
